@@ -1,0 +1,16 @@
+package com.bakouan.app.dto;
+
+import lombok.Data;
+
+@Data
+public class BaAnnuaireAgentDto {
+    private String nom;
+    private String prenom;
+    private String fonction;
+    private String numeroPoste;
+    private String telephoneSecondaire;
+    private String idService;
+    private String nomService;
+    private String idAgence;
+    private String nomAgence;
+}

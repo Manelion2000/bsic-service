@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+ name="attestation_reprise_service" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20">
+ <style name="Title" mode="Opaque" backcolor="#DCE8F6" forecolor="#1F3552" fontSize="14" isBold="true"/>
+ <style name="Section" mode="Opaque" backcolor="#E3F1EB" forecolor="#1E4B3B" fontSize="10" isBold="true"/>
+ <style name="Label" mode="Opaque" backcolor="#F3F7FC" fontSize="9" isBold="true"><box><pen lineWidth="0.4" lineColor="#BFD0E4"/></box></style>
+ <style name="Value" mode="Opaque" backcolor="#FFFFFF" fontSize="9"><box><pen lineWidth="0.4" lineColor="#D3DEE9"/></box></style>
+ <parameter name="BA_TITLE" class="java.lang.String"/><parameter name="LOGO_IMAGE" class="java.awt.Image"/><parameter name="QR_IMAGE" class="java.awt.Image"/>
+ <field name="id" class="java.lang.String"/><field name="nomDemandeur" class="java.lang.String"/><field name="prenomDemandeur" class="java.lang.String"/>
+ <field name="serviceDemandeur" class="java.lang.String"/><field name="departementDemandeur" class="java.lang.String"/><field name="motifAbsence" class="java.lang.String"/>
+ <field name="dateDebutConge" class="java.lang.String"/><field name="dateFinConge" class="java.lang.String"/><field name="dateReprise" class="java.lang.String"/>
+ <field name="nomSignataire" class="java.lang.String"/><field name="prenomSignataire" class="java.lang.String"/><field name="departementSignataire" class="java.lang.String"/>
+ <field name="fonctionSignataire" class="java.lang.String"/><field name="dateValidation" class="java.lang.String"/><field name="mentionValidation" class="java.lang.String"/>
+ <title><band height="105">
+  <rectangle><reportElement x="0" y="0" width="555" height="45" style="Title"/></rectangle>
+  <image scaleImage="RetainShape"><reportElement x="10" y="5" width="85" height="34"/><imageExpression><![CDATA[$P{LOGO_IMAGE}]]></imageExpression></image>
+  <staticText><reportElement x="105" y="11" width="340" height="24"/><textElement textAlignment="Center"><font size="15" isBold="true"/></textElement><text><![CDATA[ATTESTATION DE REPRISE DE SERVICE]]></text></staticText>
+  <textField><reportElement x="0" y="57" width="555" height="18"/><textElement textAlignment="Center"><font size="11" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{BA_TITLE}]]></textFieldExpression></textField>
+  <textField><reportElement x="0" y="79" width="555" height="16"/><textElement textAlignment="Center"/><textFieldExpression><![CDATA["Reference : " + $F{id}]]></textFieldExpression></textField>
+ </band></title>
+ <detail><band height="650">
+  <rectangle><reportElement x="0" y="0" width="555" height="20" style="Section"/></rectangle><staticText><reportElement x="10" y="4" width="300" height="14"/><text><![CDATA[INFORMATIONS DU DEMANDEUR]]></text></staticText>
+  <staticText><reportElement x="0" y="24" width="180" height="20" style="Label"/><text><![CDATA[Nom]]></text></staticText><textField><reportElement x="180" y="24" width="375" height="20" style="Value"/><textFieldExpression><![CDATA[$F{nomDemandeur}]]></textFieldExpression></textField>
+  <staticText><reportElement x="0" y="44" width="180" height="20" style="Label"/><text><![CDATA[Prenom]]></text></staticText><textField><reportElement x="180" y="44" width="375" height="20" style="Value"/><textFieldExpression><![CDATA[$F{prenomDemandeur}]]></textFieldExpression></textField>
+  <staticText><reportElement x="0" y="64" width="180" height="20" style="Label"/><text><![CDATA[Service]]></text></staticText><textField><reportElement x="180" y="64" width="375" height="20" style="Value"/><textFieldExpression><![CDATA[$F{serviceDemandeur}]]></textFieldExpression></textField>
+  <staticText><reportElement x="0" y="84" width="180" height="20" style="Label"/><text><![CDATA[Departement]]></text></staticText><textField><reportElement x="180" y="84" width="375" height="20" style="Value"/><textFieldExpression><![CDATA[$F{departementDemandeur}]]></textFieldExpression></textField>
+  <rectangle><reportElement x="0" y="122" width="555" height="20" style="Section"/></rectangle><staticText><reportElement x="10" y="126" width="300" height="14"/><text><![CDATA[PERIODE D'ABSENCE ET REPRISE]]></text></staticText>
+  <staticText><reportElement x="0" y="146" width="180" height="40" style="Label"/><text><![CDATA[Motif de l'absence]]></text></staticText><textField textAdjust="StretchHeight"><reportElement x="180" y="146" width="375" height="40" style="Value"/><textFieldExpression><![CDATA[$F{motifAbsence}]]></textFieldExpression></textField>
+  <staticText><reportElement x="0" y="186" width="180" height="20" style="Label"/><text><![CDATA[Debut de l'absence]]></text></staticText><textField><reportElement x="180" y="186" width="375" height="20" style="Value"/><textFieldExpression><![CDATA[$F{dateDebutConge}]]></textFieldExpression></textField>
+  <staticText><reportElement x="0" y="206" width="180" height="20" style="Label"/><text><![CDATA[Fin de l'absence]]></text></staticText><textField><reportElement x="180" y="206" width="375" height="20" style="Value"/><textFieldExpression><![CDATA[$F{dateFinConge}]]></textFieldExpression></textField>
+  <staticText><reportElement x="0" y="226" width="180" height="20" style="Label"/><text><![CDATA[Date de reprise]]></text></staticText><textField><reportElement x="180" y="226" width="375" height="20" style="Value"/><textFieldExpression><![CDATA[$F{dateReprise}]]></textFieldExpression></textField>
+  <rectangle><reportElement x="0" y="264" width="555" height="20" style="Section"/></rectangle><staticText><reportElement x="10" y="268" width="300" height="14"/><text><![CDATA[SIGNATAIRE]]></text></staticText>
+  <staticText><reportElement x="0" y="288" width="180" height="20" style="Label"/><text><![CDATA[Nom]]></text></staticText><textField><reportElement x="180" y="288" width="375" height="20" style="Value"/><textFieldExpression><![CDATA[$F{nomSignataire}]]></textFieldExpression></textField>
+  <staticText><reportElement x="0" y="308" width="180" height="20" style="Label"/><text><![CDATA[Prenom]]></text></staticText><textField><reportElement x="180" y="308" width="375" height="20" style="Value"/><textFieldExpression><![CDATA[$F{prenomSignataire}]]></textFieldExpression></textField>
+  <staticText><reportElement x="0" y="328" width="180" height="20" style="Label"/><text><![CDATA[Departement]]></text></staticText><textField><reportElement x="180" y="328" width="375" height="20" style="Value"/><textFieldExpression><![CDATA[$F{departementSignataire}]]></textFieldExpression></textField>
+  <staticText><reportElement x="0" y="348" width="180" height="20" style="Label"/><text><![CDATA[Fonction]]></text></staticText><textField><reportElement x="180" y="348" width="375" height="20" style="Value"/><textFieldExpression><![CDATA[$F{fonctionSignataire}]]></textFieldExpression></textField>
+  <rectangle><reportElement x="0" y="392" width="350" height="72" mode="Opaque" backcolor="#E3F1EB"/><graphicElement><pen lineWidth="1" lineColor="#1E4B3B"/></graphicElement></rectangle>
+  <textField><reportElement x="10" y="405" width="330" height="22"/><textElement textAlignment="Center"><font size="12" isBold="true"/></textElement><textFieldExpression><![CDATA[$F{mentionValidation}]]></textFieldExpression></textField>
+  <textField><reportElement x="10" y="433" width="330" height="18"/><textElement textAlignment="Center"/><textFieldExpression><![CDATA["Validation du " + $F{dateValidation}]]></textFieldExpression></textField>
+  <image scaleImage="RetainShape"><reportElement x="390" y="382" width="150" height="150"/><imageExpression><![CDATA[$P{QR_IMAGE}]]></imageExpression></image>
+  <textField><reportElement x="0" y="490" width="350" height="25"/><textElement textAlignment="Center"><font size="9" isBold="true"/></textElement><textFieldExpression><![CDATA[$F{nomSignataire} + " " + $F{prenomSignataire} + " - " + $F{fonctionSignataire}]]></textFieldExpression></textField>
+  <staticText><reportElement x="0" y="520" width="350" height="18"/><textElement textAlignment="Center"/><text><![CDATA[Signature electronique du signataire]]></text></staticText>
+ </band></detail>
+</jasperReport>

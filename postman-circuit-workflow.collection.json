@@ -1,0 +1,215 @@
+{
+  "info": {
+    "name": "BSIC - Circuit Workflow",
+    "description": "Collection Postman pour tester le circuit de validation: creation circuit, affectation plateforme, creation fiche, initialisation et validation des etapes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1 - Creer Circuit",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"libelle\": \"Circuit ouverture compte standard\",\n  \"description\": \"Circuit de validation standard\",\n  \"actif\": true,\n  \"etapes\": [\n    {\n      \"departementId\": \"{{departement_initiateur_id}}\",\n      \"roleId\": \"{{role_initiateur_id}}\",\n      \"ordre\": 1,\n      \"obligatoire\": true,\n      \"actif\": true\n    },\n    {\n      \"departementId\": \"{{departement_rh_id}}\",\n      \"roleId\": \"{{role_rh_id}}\",\n      \"ordre\": 2,\n      \"obligatoire\": true,\n      \"actif\": true\n    },\n    {\n      \"departementId\": \"{{departement_dga_id}}\",\n      \"roleId\": null,\n      \"ordre\": 4,\n      \"obligatoire\": true,\n      \"actif\": true\n    },\n    {\n      \"departementId\": \"{{departement_dg_id}}\",\n      \"roleId\": null,\n      \"ordre\": 5,\n      \"obligatoire\": true,\n      \"actif\": true\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/circuits",
+          "host": ["{{base_url}}"],
+          "path": ["api", "circuits"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 201', function () { pm.response.to.have.status(201); });",
+              "var json = pm.response.json();",
+              "if (json && json.id) { pm.collectionVariables.set('circuit_id', json.id); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2 - Lister Circuits",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/api/circuits",
+          "host": ["{{base_url}}"],
+          "path": ["api", "circuits"]
+        }
+      }
+    },
+    {
+      "name": "3 - Detail Circuit",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/api/circuits/{{circuit_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "circuits", "{{circuit_id}}"]
+        }
+      }
+    },
+    {
+      "name": "4 - Mettre a jour Circuit",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"libelle\": \"Circuit ouverture compte standard modifie\",\n  \"description\": \"Version mise a jour\",\n  \"actif\": true,\n  \"etapes\": [\n    {\n      \"departementId\": \"{{departement_initiateur_id}}\",\n      \"roleId\": \"{{role_initiateur_id}}\",\n      \"ordre\": 1,\n      \"obligatoire\": true,\n      \"actif\": true\n    },\n    {\n      \"departementId\": \"{{departement_risque_id}}\",\n      \"roleId\": \"{{role_risque_id}}\",\n      \"ordre\": 2,\n      \"obligatoire\": true,\n      \"actif\": true\n    },\n    {\n      \"departementId\": \"{{departement_dga_id}}\",\n      \"roleId\": null,\n      \"ordre\": 4,\n      \"obligatoire\": true,\n      \"actif\": true\n    },\n    {\n      \"departementId\": \"{{departement_dg_id}}\",\n      \"roleId\": null,\n      \"ordre\": 5,\n      \"obligatoire\": true,\n      \"actif\": true\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/circuits/{{circuit_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "circuits", "{{circuit_id}}"]
+        }
+      }
+    },
+    {
+      "name": "5 - Creer Plateforme avec Circuit",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"code\": \"WINDOWS\",\n  \"nom\": \"Compte Windows\",\n  \"description\": \"Gestion des acces Windows\",\n  \"idCircuit\": \"{{circuit_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/habilitations/plateformes",
+          "host": ["{{base_url}}"],
+          "path": ["api", "habilitations", "plateformes"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 201', function () { pm.response.to.have.status(201); });",
+              "var json = pm.response.json();",
+              "if (json && json.id) { pm.collectionVariables.set('plateforme_id', json.id); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6 - Creer Fiche",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"idEmploye\": \"{{employe_id}}\",\n  \"idCircuit\": \"{{circuit_id}}\",\n  \"motif\": \"Ouverture de compte Windows\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/habilitations/fiches",
+          "host": ["{{base_url}}"],
+          "path": ["api", "habilitations", "fiches"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 201', function () { pm.response.to.have.status(201); });",
+              "var json = pm.response.json();",
+              "if (json && json.id) { pm.collectionVariables.set('fiche_id', json.id); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7 - Initialiser Etapes depuis Circuit",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{base_url}}/api/habilitations/fiches/{{fiche_id}}/etapes-from-circuit",
+          "host": ["{{base_url}}"],
+          "path": ["api", "habilitations", "fiches", "{{fiche_id}}", "etapes-from-circuit"]
+        }
+      }
+    },
+    {
+      "name": "8 - Mes validations",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/api/habilitations/mes-validations?page=0&size=20",
+          "host": ["{{base_url}}"],
+          "path": ["api", "habilitations", "mes-validations"],
+          "query": [
+            { "key": "page", "value": "0" },
+            { "key": "size", "value": "20" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "9 - Valider une etape",
+      "request": {
+        "method": "PUT",
+        "url": {
+          "raw": "{{base_url}}/api/habilitations/fiches-etapes/{{fiche_etape_id}}/status?statut=VALIDE",
+          "host": ["{{base_url}}"],
+          "path": ["api", "habilitations", "fiches-etapes", "{{fiche_etape_id}}", "status"],
+          "query": [
+            { "key": "statut", "value": "VALIDE" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "10 - Rejeter une etape",
+      "request": {
+        "method": "PUT",
+        "url": {
+          "raw": "{{base_url}}/api/habilitations/fiches-etapes/{{fiche_etape_id}}/status?statut=REJETE&commentaire=Motif",
+          "host": ["{{base_url}}"],
+          "path": ["api", "habilitations", "fiches-etapes", "{{fiche_etape_id}}", "status"],
+          "query": [
+            { "key": "statut", "value": "REJETE" },
+            { "key": "commentaire", "value": "Motif" }
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080" },
+    { "key": "circuit_id", "value": "" },
+    { "key": "plateforme_id", "value": "" },
+    { "key": "fiche_id", "value": "" },
+    { "key": "fiche_etape_id", "value": "" },
+    { "key": "employe_id", "value": "" },
+
+    { "key": "departement_initiateur_id", "value": "" },
+    { "key": "departement_rh_id", "value": "" },
+    { "key": "departement_risque_id", "value": "" },
+    { "key": "departement_dga_id", "value": "" },
+    { "key": "departement_dg_id", "value": "" },
+
+    { "key": "role_initiateur_id", "value": "" },
+    { "key": "role_rh_id", "value": "" },
+    { "key": "role_risque_id", "value": "" }
+  ]
+}

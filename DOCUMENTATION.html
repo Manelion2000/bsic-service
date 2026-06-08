@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>DOCUMENTATION</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    html { -webkit-text-size-adjust: 100%; }
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+</head>
+<body>
+<h1 id="documentation-bsic-service">Documentation ? bsic-service</h1>
+<h2 id="vue-densemble">Vue d’ensemble</h2>
+<p>Service Spring Boot pour la gestion de l’annuaire (directions,
+services, departements, agences, employes), de l’habilitation
+(plateformes, circuits, fiches, etapes), des reunions, et la generation de
+rapports PDF.</p>
+<h2 id="stack-technique">Stack technique</h2>
+<ul>
+<li>Java 17</li>
+<li>Spring Boot 3.5.3 (Web, Data JPA, Validation, Security,
+Actuator)</li>
+<li>PostgreSQL</li>
+<li>MapStruct</li>
+<li>JWT (jjwt)</li>
+<li>Spring Mail + Thymeleaf</li>
+<li>JasperReports</li>
+<li>Springdoc OpenAPI (UI)</li>
+</ul>
+<h2 id="lancement">Lancement</h2>
+<p>Port par defaut: <code>8083</code></p>
+<h3 id="profil-dev-securite-ouverte">Profil dev (securite ouverte)</h3>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>mvnw<span class="op">.</span><span class="fu">cmd</span> spring-boot<span class="op">:</span>run <span class="op">-</span>Dspring-boot<span class="op">.</span><span class="fu">run</span><span class="op">.</span><span class="fu">profiles</span><span class="op">=</span>dev</span></code></pre></div>
+<h3 id="profil-prod-jwt-securite">Profil prod (JWT + securite)</h3>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>mvnw<span class="op">.</span><span class="fu">cmd</span> spring-boot<span class="op">:</span>run <span class="op">-</span>Dspring-boot<span class="op">.</span><span class="fu">run</span><span class="op">.</span><span class="fu">profiles</span><span class="op">=</span>prod</span></code></pre></div>
+<h3 id="build">Build</h3>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>mvnw<span class="op">.</span><span class="fu">cmd</span> clean package</span></code></pre></div>
+<h2 id="configuration">Configuration</h2>
+<p>Fichiers: - <code>src/main/resources/application.yml</code> (commun)
+- <code>src/main/resources/application-dev.yml</code> -
+<code>src/main/resources/application-prod.yml</code></p>
+<h3 id="base">Base</h3>
+<ul>
+<li><code>server.port</code>: <code>8083</code></li>
+<li><code>spring.profiles.active</code>: <code>prod</code></li>
+<li><code>app.storage.path</code>: <code>./datas</code> (stockage
+fichiers)</li>
+</ul>
+<h3 id="db">DB</h3>
+<p>Profil dev: -
+<code>jdbc:postgresql://localhost:5432/categoriedb</code></p>
+<p>Profil prod: -
+<code>jdbc:postgresql://localhost:5432/categorie_db</code></p>
+<h3 id="mail">Mail</h3>
+<p>Configurer via <code>spring.mail.*</code> dans
+<code>application.yml</code>.</p>
+<h2 id="securite">Securite</h2>
+<ul>
+<li>Profil <code>dev</code>: toutes les requetes sont permises,
+CORS/CSRF desactives.</li>
+<li>Profil <code>prod</code>: JWT + stateless, certaines routes
+publiques (auth, activation, CSRF, etc.), le reste authentifie.</li>
+</ul>
+<h2 id="stockage-fichiers">Stockage fichiers</h2>
+<p>Service: <code>BaFileStorageService</code> - Lecture par id dans
+<code>app.storage.path</code>. - Sauvegarde genere un id (UUID) et ecrit
+le fichier. - Suppression logique par suppression du fichier.</p>
+<h2 id="rapports">Rapports</h2>
+<p>Service: <code>BaReportService</code> - Fiche habilitation:
+<code>reports/fiche-habilitation.jrxml</code>. - Fichiers generes dans
+<code>./target</code>.</p>
+<h2 id="apis">APIs</h2>
+<p>Base URL: <code>/api</code></p>
+<h3 id="auth">Auth</h3>
+<ul>
+<li><code>POST /api/authenticate</code> ? connexion, retourne JWT</li>
+<li><code>GET /api/csrf</code> ? recupere CSRF token</li>
+</ul>
+<h3 id="utilisateurs-roles-profils">Utilisateurs / roles / profils</h3>
+<ul>
+<li><p><code>GET /api/users</code> ? liste utilisateurs</p></li>
+<li><p><code>POST /api/users</code> ? creation utilisateur</p></li>
+<li><p><code>PUT /api/users/{code}</code> ? maj utilisateur</p></li>
+<li><p><code>DELETE /api/users/{code}</code> ? suppression
+logique</p></li>
+<li><p><code>GET /api/users/details</code> ? infos utilisateur
+courant</p></li>
+<li><p><code>PUT /api/users/change-password</code></p></li>
+<li><p><code>PUT /api/users/request-reset-password</code></p></li>
+<li><p><code>PUT /api/users/complete-reset-password</code></p></li>
+<li><p><code>GET /api/users/{id}/activate</code></p></li>
+<li><p><code>GET /api/roles</code></p></li>
+<li><p><code>POST /api/roles</code></p></li>
+<li><p><code>PUT /api/roles</code></p></li>
+<li><p><code>DELETE /api/roles/{id}</code></p></li>
+<li><p><code>GET /api/profils</code></p></li>
+<li><p><code>POST /api/profils</code></p></li>
+<li><p><code>PUT /api/profils</code></p></li>
+<li><p><code>DELETE /api/profils/{id}</code></p></li>
+</ul>
+<h3 id="documents">Documents</h3>
+<ul>
+<li><code>GET /api/documents/{id}</code> ? recuperer un document</li>
+</ul>
+<h3 id="annuaire">Annuaire</h3>
+<ul>
+<li><code>GET /api/annuaires/directions</code></li>
+<li><code>POST /api/annuaires/directions</code></li>
+<li><code>GET /api/annuaires/services</code></li>
+<li><code>POST /api/annuaires/services</code></li>
+<li><code>GET /api/annuaires/departements</code></li>
+<li><code>POST /api/annuaires/departements</code></li>
+<li><code>GET /api/annuaires/agences</code></li>
+<li><code>POST /api/annuaires/agences</code></li>
+<li><code>GET /api/annuaires/employes?q=...</code></li>
+<li><code>POST /api/annuaires/employes</code></li>
+<li><code>PUT /api/annuaires/employes/{id}</code></li>
+<li><code>DELETE /api/annuaires/employes/{id}</code></li>
+<li><code>GET /api/annuaires/annuaire?directionId=&amp;departementId=&amp;serviceId=</code></li>
+</ul>
+<h3 id="habilitation">Habilitation</h3>
+<ul>
+<li><code>GET /api/habilitations/plateformes</code></li>
+<li><code>POST /api/habilitations/plateformes</code></li>
+<li><code>GET /api/habilitations/circuits</code> (filtre optionnel: <code>?plateformeId=...</code>)</li>
+<li><code>POST /api/habilitations/circuits</code></li>
+<li><code>PUT /api/habilitations/circuits/{id}</code></li>
+<li><code>POST /api/habilitations/etapes</code></li>
+<li><code>GET /api/habilitations/etapes?type=&amp;directionId=&amp;serviceId=</code></li>
+<li><code>GET /api/habilitations/plateformes/{id}/etapes</code></li>
+<li><code>PUT /api/habilitations/plateformes/{id}/etapes</code></li>
+<li><code>GET /api/habilitations/fiches</code></li>
+<li><code>GET /api/habilitations/fiches/{id}</code></li>
+<li><code>POST /api/habilitations/fiches</code></li>
+<li><code>GET /api/habilitations/mes-demandes?statut=</code></li>
+<li><code>GET /api/habilitations/mes-validations?statut=</code></li>
+<li><code>POST /api/habilitations/fiches/{id}/etapes-from-plateforme</code></li>
+<li><code>POST /api/habilitations/fiches-etapes</code></li>
+<li><code>PUT /api/habilitations/fiches-etapes/{id}/status?statut=&amp;commentaire=</code></li>
+</ul>
+<h3 id="reunions">Reunions</h3>
+<ul>
+<li><code>GET /api/reunions</code></li>
+<li><code>POST /api/reunions</code></li>
+<li><code>POST /api/reunions-participants</code></li>
+<li><code>POST /api/reunions-actions</code></li>
+</ul>
+<h3 id="reporting">Reporting</h3>
+<p>Base: <code>/api/reporting</code> -
+<code>GET /api/reporting/habilitations/fiches/{id}</code> ? PDF fiche
+habilitation</p>
+<h2 id="domaines-principaux">Domaines principaux</h2>
+<ul>
+<li>Annuaire: <code>BaDirection</code>, <code>BaService</code>,
+<code>BaDepartement</code>, <code>BaAgence</code>,
+<code>BaUser</code></li>
+<li>Habilitation: <code>BaPlateforme</code>, <code>BaCircuit</code>, <code>BaEtapeDefinition</code>,
+<code>BaFicheHabilitation</code>,
+<code>BaFicheHabilitationEtape</code></li>
+<li>Reunions: <code>BaReunion</code>, <code>BaReunionParticipant</code>,
+<code>BaReunionAction</code></li>
+</ul>
+<h2 id="divers">Divers</h2>
+<ul>
+<li>Swagger UI (springdoc) disponible si non desactive:
+<code>/swagger-ui/index.html</code>.</li>
+<li>Logs metiers via <code>BaLogService</code>.</li>
+</ul>
+<hr />
+<p>Sources principales: controllers et services du projet.</p>
+</body>
+</html>

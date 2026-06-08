@@ -1,0 +1,213 @@
+<html lang="fr" xmlns:th="http://www.w3.org/1999/xhtml">
+<head>
+    <style>
+        .yt-body {
+            position: relative;
+            background-color: #f5f7fa;
+            color: #333333;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .yt-email-body {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            text-align: center;
+            margin: auto;
+            padding: 40px 30px;
+            max-width: 600px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(27, 94, 32, 0.08);
+            border: 1px solid rgba(27, 94, 32, 0.1);
+        }
+
+        .yt-logo-container {
+            width: 80px;
+            height: 80px;
+            margin: 20px auto;
+            background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 16px rgba(27, 94, 32, 0.2);
+        }
+
+        .yt-img {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .yt-title {
+            color: #1B5E20;
+            font-size: 28px;
+            font-weight: 700;
+            margin: 20px 0;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .yt-subtitle {
+            color: #2E7D32;
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 20px;
+        }
+
+        hr {
+            border: none;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #1B5E20, transparent);
+            margin: 30px 0;
+        }
+
+        .yt-content {
+            text-align: left;
+            color: #333333;
+            margin: 30px 0;
+            background-color: rgba(27, 94, 32, 0.03);
+            padding: 25px;
+            border-radius: 8px;
+            border-left: 4px solid #1B5E20;
+        }
+
+        .yt-message {
+            text-align: justify;
+            line-height: 1.7;
+            margin: 20px 0;
+            font-size: 16px;
+        }
+
+        .yt-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
+            color: white;
+            padding: 14px 32px;
+            margin: 25px 0;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 16px rgba(27, 94, 32, 0.2);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .yt-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(27, 94, 32, 0.3);
+            background: linear-gradient(135deg, #145214 0%, #1B5E20 100%);
+        }
+
+        .yt-email-footer {
+            background: linear-gradient(135deg, #1B5E20 0%, #145214 100%);
+            text-align: center;
+            margin: auto;
+            padding: 25px;
+            max-width: 600px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(27, 94, 32, 0.15);
+            color: white;
+            margin-top: 40px;
+        }
+
+        .yt-email-footer p {
+            margin: 8px 0;
+            font-size: 14px;
+        }
+
+        .yt-email-footer a {
+            color: #FFC107;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+
+        .yt-email-footer a:hover {
+            color: #FFD54F;
+        }
+
+        .bsic-brand {
+            font-weight: 700;
+            color: #1B5E20;
+        }
+
+        .contact-info {
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        /* Styles pour le mode sombre */
+        @media (prefers-color-scheme: dark) {
+            .yt-body {
+                background-color: #1c1c1e;
+                color: #ffffff;
+            }
+
+            .yt-email-body {
+                background: #2e2e2e;
+                color: #ffffff;
+            }
+
+            .yt-email-footer {
+                background: #2e2e2e;
+                color: white;
+            }
+
+            .yt-title {
+                color: white;
+            }
+
+            hr {
+                border-color: white;
+            }
+        }
+
+        @media all and (max-width: 580px) {
+            .yt-email-body,
+            .yt-email-footer {
+                width: 90%;
+                padding: 20px;
+            }
+        }
+
+    </style>
+    <title>BSIC</title>
+</head>
+<body class="yt-body">
+<div class="yt-email-body">
+    <div class="yt-logo-container">
+        <img class="yt-img" alt="Logo" src="#"/>
+    </div>
+    <b class="yt-title">BSIC</b>
+    <div class="yt-subtitle">Banque Sahélo-Saharienne pour l'Investissement et le Commerce</div>
+    <hr/>
+    <div class="yt-content">
+        <h3>Bonjour,</h3>
+        <div class="yt-message" th:utext="${msg}">
+        </div>
+    </div>
+</div>
+<br/>
+
+<div class="yt-email-footer">
+    <div class="contact-info">
+        <p><strong>BSIC - Banque Sahélo-Saharienne pour l'Investissement et le Commerce</strong></p>
+        <p>Siège Social: Abidjan, Côte d'Ivoire</p>
+        <p>Email: contact@bsic.net | Tel: +225 27 20 00 00 00</p>
+    </div>
+    <br/>
+    <p>&copy; <span th:text="${#calendars.format(#calendars.createNow(), 'yyyy')}">2024</span> BSIC. Tous droits réservés.</p>
+    <p>
+        <a href="#">Politique de confidentialité</a> | 
+        <a href="#">Conditions d'utilisation</a> | 
+        <a href="#">Support</a>
+    </p>
+</div>
+</body>

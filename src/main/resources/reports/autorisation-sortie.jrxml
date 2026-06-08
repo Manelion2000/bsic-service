@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="autorisation_sortie"
+              pageWidth="595"
+              pageHeight="842"
+              columnWidth="555"
+              leftMargin="20"
+              rightMargin="20"
+              topMargin="20"
+              bottomMargin="20"
+              uuid="6bc4fe91-8f7c-4a07-b5d6-a4c6e0dbe612">
+
+    <style name="TitleBand" mode="Opaque" backcolor="#DCE8F6" forecolor="#1F3552" fontSize="13" isBold="true"/>
+    <style name="SectionTitle" mode="Opaque" backcolor="#E3F1EB" forecolor="#1E4B3B" fontSize="10" isBold="true"/>
+    <style name="LabelCell" mode="Opaque" backcolor="#F3F7FC" forecolor="#1E2A36" fontSize="9" isBold="true">
+        <box><pen lineWidth="0.4" lineColor="#BFD0E4"/></box>
+    </style>
+    <style name="ValueCell" mode="Opaque" backcolor="#FFFFFF" forecolor="#1E2A36" fontSize="9">
+        <box><pen lineWidth="0.4" lineColor="#D3DEE9"/></box>
+    </style>
+
+    <parameter name="REPORT_DATE" class="java.util.Date" isForPrompting="false">
+        <defaultValueExpression><![CDATA[new java.util.Date()]]></defaultValueExpression>
+    </parameter>
+    <parameter name="BA_TITLE" class="java.lang.String"/>
+    <parameter name="LOGO_IMAGE" class="java.awt.Image"/>
+    <parameter name="QR_IMAGE" class="java.awt.Image"/>
+
+    <field name="id" class="java.lang.String"/>
+    <field name="nomCompletDemandeur" class="java.lang.String"/>
+    <field name="matriculeDemandeur" class="java.lang.String"/>
+    <field name="fonctionDemandeur" class="java.lang.String"/>
+    <field name="serviceDemandeur" class="java.lang.String"/>
+    <field name="directionDemandeur" class="java.lang.String"/>
+    <field name="agenceDemandeur" class="java.lang.String"/>
+    <field name="typeStructure" class="java.lang.String"/>
+    <field name="motif" class="java.lang.String"/>
+    <field name="dateSortie" class="java.lang.String"/>
+    <field name="statutValidation" class="java.lang.String"/>
+    <field name="commentaireValidation" class="java.lang.String"/>
+    <field name="nomCompletValidateur" class="java.lang.String"/>
+    <field name="dateValidation" class="java.lang.String"/>
+    <field name="isValidee" class="java.lang.Boolean"/>
+
+    <title>
+        <band height="96">
+            <rectangle>
+                <reportElement x="0" y="0" width="555" height="38" style="TitleBand"/>
+            </rectangle>
+            <image scaleImage="RetainShape">
+                <reportElement x="10" y="4" width="80" height="30"/>
+                <imageExpression><![CDATA[$P{LOGO_IMAGE}]]></imageExpression>
+            </image>
+            <staticText>
+                <reportElement x="100" y="8" width="320" height="22"/>
+                <textElement textAlignment="Center">
+                    <font size="14" isBold="true"/>
+                </textElement>
+                <text><![CDATA[AUTORISATION DE SORTIE]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="420" y="10" width="125" height="16"/>
+                <textElement textAlignment="Right">
+                    <font size="9" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Date: " + new java.text.SimpleDateFormat("dd/MM/yyyy").format($P{REPORT_DATE})]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="0" y="52" width="555" height="20"/>
+                <textElement textAlignment="Center">
+                    <font size="10" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{BA_TITLE}]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="0" y="74" width="555" height="18"/>
+                <textElement textAlignment="Center">
+                    <font size="9"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Reference: " + $F{id}]]></textFieldExpression>
+            </textField>
+        </band>
+    </title>
+
+    <detail>
+        <band height="690">
+            <rectangle>
+                <reportElement x="0" y="0" width="555" height="20" style="SectionTitle"/>
+            </rectangle>
+            <staticText>
+                <reportElement x="10" y="4" width="300" height="14"/>
+                <text><![CDATA[INFORMATIONS AGENT]]></text>
+            </staticText>
+
+            <staticText><reportElement x="0" y="24" width="185" height="20" style="LabelCell"/><text><![CDATA[Nom complet]]></text></staticText>
+            <textField><reportElement x="185" y="24" width="370" height="20" style="ValueCell"/><textFieldExpression><![CDATA[$F{nomCompletDemandeur}]]></textFieldExpression></textField>
+
+            <staticText><reportElement x="0" y="44" width="185" height="20" style="LabelCell"/><text><![CDATA[Matricule]]></text></staticText>
+            <textField><reportElement x="185" y="44" width="370" height="20" style="ValueCell"/><textFieldExpression><![CDATA[$F{matriculeDemandeur}]]></textFieldExpression></textField>
+
+            <staticText><reportElement x="0" y="64" width="185" height="20" style="LabelCell"/><text><![CDATA[Fonction]]></text></staticText>
+            <textField><reportElement x="185" y="64" width="370" height="20" style="ValueCell"/><textFieldExpression><![CDATA[$F{fonctionDemandeur}]]></textFieldExpression></textField>
+
+            <staticText><reportElement x="0" y="84" width="185" height="20" style="LabelCell"/><text><![CDATA[Direction]]></text></staticText>
+            <textField><reportElement x="185" y="84" width="370" height="20" style="ValueCell"/><textFieldExpression><![CDATA[$F{directionDemandeur}]]></textFieldExpression></textField>
+
+            <staticText><reportElement x="0" y="104" width="185" height="20" style="LabelCell"/><text><![CDATA[Service]]></text></staticText>
+            <textField><reportElement x="185" y="104" width="370" height="20" style="ValueCell"/><textFieldExpression><![CDATA[$F{serviceDemandeur}]]></textFieldExpression></textField>
+
+            <staticText><reportElement x="0" y="124" width="185" height="20" style="LabelCell"/><text><![CDATA[Agence]]></text></staticText>
+            <textField><reportElement x="185" y="124" width="370" height="20" style="ValueCell"/><textFieldExpression><![CDATA[$F{agenceDemandeur}]]></textFieldExpression></textField>
+
+            <rectangle>
+                <reportElement x="0" y="160" width="555" height="20" style="SectionTitle"/>
+            </rectangle>
+            <staticText>
+                <reportElement x="10" y="164" width="300" height="14"/>
+                <text><![CDATA[INFORMATIONS DE SORTIE]]></text>
+            </staticText>
+
+            <staticText><reportElement x="0" y="184" width="185" height="20" style="LabelCell"/><text><![CDATA[Type de structure]]></text></staticText>
+            <textField><reportElement x="185" y="184" width="370" height="20" style="ValueCell"/><textFieldExpression><![CDATA[$F{typeStructure}]]></textFieldExpression></textField>
+
+            <staticText><reportElement x="0" y="204" width="185" height="20" style="LabelCell"/><text><![CDATA[Date de sortie]]></text></staticText>
+            <textField><reportElement x="185" y="204" width="370" height="20" style="ValueCell"/><textFieldExpression><![CDATA[$F{dateSortie}]]></textFieldExpression></textField>
+
+            <staticText><reportElement x="0" y="224" width="185" height="46" style="LabelCell"/><text><![CDATA[Motif]]></text></staticText>
+            <textField textAdjust="StretchHeight">
+                <reportElement x="185" y="224" width="370" height="46" style="ValueCell"/>
+                <textElement verticalAlignment="Top"/>
+                <textFieldExpression><![CDATA[$F{motif}]]></textFieldExpression>
+            </textField>
+
+            <rectangle>
+                <reportElement x="0" y="292" width="555" height="20" style="SectionTitle"/>
+            </rectangle>
+            <staticText>
+                <reportElement x="10" y="296" width="300" height="14"/>
+                <text><![CDATA[VALIDATION HIERARCHIQUE]]></text>
+            </staticText>
+
+            <staticText><reportElement x="0" y="316" width="185" height="20" style="LabelCell"/><text><![CDATA[Statut]]></text></staticText>
+            <textField><reportElement x="185" y="316" width="370" height="20" style="ValueCell"/><textFieldExpression><![CDATA[$F{statutValidation}]]></textFieldExpression></textField>
+
+            <staticText><reportElement x="0" y="336" width="185" height="20" style="LabelCell"/><text><![CDATA[Motif / Commentaire]]></text></staticText>
+            <textField><reportElement x="185" y="336" width="370" height="20" style="ValueCell"/><textFieldExpression><![CDATA[$F{commentaireValidation}]]></textFieldExpression></textField>
+
+            <staticText><reportElement x="0" y="356" width="185" height="20" style="LabelCell"/><text><![CDATA[Valide par]]></text></staticText>
+            <textField><reportElement x="185" y="356" width="370" height="20" style="ValueCell"/><textFieldExpression><![CDATA[$F{nomCompletValidateur}]]></textFieldExpression></textField>
+
+            <staticText><reportElement x="0" y="376" width="185" height="20" style="LabelCell"/><text><![CDATA[Date validation]]></text></staticText>
+            <textField><reportElement x="185" y="376" width="370" height="20" style="ValueCell"/><textFieldExpression><![CDATA[$F{dateValidation}]]></textFieldExpression></textField>
+
+            <line>
+                <reportElement x="0" y="452" width="555" height="1"/>
+            </line>
+            <staticText>
+                <reportElement x="0" y="462" width="350" height="16"/>
+                <textElement><font size="9" isBold="true"/></textElement>
+                <text><![CDATA[Authentification de l'autorisation]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="0" y="480" width="350" height="36"/>
+                <textElement><font size="8"/></textElement>
+                <textFieldExpression><![CDATA["Document interne BSIC"]]></textFieldExpression>
+            </textField>
+            <image scaleImage="RetainShape">
+                <reportElement x="385" y="452" width="160" height="160"/>
+                <imageExpression><![CDATA[$P{QR_IMAGE}]]></imageExpression>
+            </image>
+        </band>
+    </detail>
+
+</jasperReport>

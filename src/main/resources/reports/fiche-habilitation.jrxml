@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="fiche_habilitation"
+              pageWidth="595"
+              pageHeight="842"
+              columnWidth="555"
+              leftMargin="20"
+              rightMargin="20"
+              topMargin="20"
+              bottomMargin="20"
+              uuid="3f2d3c10-5e9a-4d1c-8d77-152cf8b2b90f">
+
+    <style name="BsicHeader" mode="Opaque" backcolor="#DCE8F6" forecolor="#1F3552" fontSize="12" isBold="true"/>
+    <style name="SectionTitle" mode="Opaque" backcolor="#E3F1EB" forecolor="#1E4B3B" fontSize="10" isBold="true"/>
+    <style name="LabelCell" mode="Opaque" backcolor="#F3F7FC" forecolor="#1E2A36" fontSize="9" isBold="true">
+        <box>
+            <pen lineWidth="0.4" lineColor="#BFD0E4"/>
+        </box>
+    </style>
+    <style name="ValueCell" mode="Opaque" backcolor="#FFFFFF" forecolor="#1E2A36" fontSize="9">
+        <box>
+            <pen lineWidth="0.4" lineColor="#D3DEE9"/>
+        </box>
+    </style>
+    <style name="SignRow" mode="Opaque" backcolor="#F8FBFA" fontSize="9">
+        <box>
+            <pen lineWidth="0.4" lineColor="#C7DCD2"/>
+        </box>
+        <conditionalStyle>
+            <conditionExpression><![CDATA[$V{REPORT_COUNT} % 2 == 0]]></conditionExpression>
+            <style backcolor="#EFF6F3" mode="Opaque"/>
+        </conditionalStyle>
+    </style>
+
+    <subDataset name="SignatairesDataset" uuid="5451ceca-e360-4306-b8f7-660de6b39c0f">
+        <field name="nomSignataire" class="java.lang.String"/>
+        <field name="avis" class="java.lang.String"/>
+    </subDataset>
+
+    <parameter name="REPORT_DATE" class="java.util.Date" isForPrompting="false">
+        <defaultValueExpression><![CDATA[new java.util.Date()]]></defaultValueExpression>
+    </parameter>
+    <parameter name="BA_TITLE" class="java.lang.String"/>
+    <parameter name="SIGNATAIRES_DATA_SOURCE" class="net.sf.jasperreports.engine.JRDataSource"/>
+
+    <field name="id" class="java.lang.String"/>
+    <field name="matriculeEmploye" class="java.lang.String"/>
+    <field name="nomCompletEmploye" class="java.lang.String"/>
+    <field name="nomDirectionEmploye" class="java.lang.String"/>
+    <field name="nomServiceEmploye" class="java.lang.String"/>
+    <field name="nomDepartementEmploye" class="java.lang.String"/>
+    <field name="nomAgenceEmploye" class="java.lang.String"/>
+    <field name="nomPlateforme" class="java.lang.String"/>
+    <field name="nomCircuit" class="java.lang.String"/>
+    <field name="statutHabilitation" class="java.lang.String"/>
+    <field name="priorite" class="java.lang.String"/>
+    <field name="motif" class="java.lang.String"/>
+    <field name="fonctionEmploye" class="java.lang.String"/>
+    <field name="telephoneMobileEmploye" class="java.lang.String"/>
+    <field name="etapes" class="java.lang.Object"/>
+
+    <title>
+        <band height="76">
+            <rectangle>
+                <reportElement x="0" y="0" width="555" height="32" style="BsicHeader"/>
+            </rectangle>
+            <staticText>
+                <reportElement x="10" y="7" width="390" height="18"/>
+                <textElement>
+                    <font size="12" isBold="true"/>
+                </textElement>
+                <text><![CDATA[FICHE D'HABILITATION UTILISATEUR]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="390" y="8" width="155" height="16"/>
+                <textElement textAlignment="Right">
+                    <font size="9" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Date : " + new java.text.SimpleDateFormat("dd/MM/yyyy").format($P{REPORT_DATE})]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="0" y="44" width="555" height="18"/>
+                <textElement textAlignment="Center">
+                    <font size="10" isBold="true"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{BA_TITLE}]]></textFieldExpression>
+            </textField>
+        </band>
+    </title>
+
+    <detail>
+        <band height="700">
+            <rectangle>
+                <reportElement x="0" y="0" width="555" height="20" style="SectionTitle"/>
+            </rectangle>
+            <staticText>
+                <reportElement x="10" y="4" width="300" height="14"/>
+                <text><![CDATA[INFORMATIONS EMPLOYE]]></text>
+            </staticText>
+
+            <staticText>
+                <reportElement x="0" y="24" width="185" height="20" style="LabelCell"/>
+                <text><![CDATA[Matricule]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="185" y="24" width="370" height="20" style="ValueCell"/>
+                <textFieldExpression><![CDATA[$F{matriculeEmploye}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="0" y="44" width="185" height="20" style="LabelCell"/>
+                <text><![CDATA[Nom complet]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="185" y="44" width="370" height="20" style="ValueCell"/>
+                <textFieldExpression><![CDATA[$F{nomCompletEmploye}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="0" y="64" width="185" height="20" style="LabelCell"/>
+                <text><![CDATA[Service]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="185" y="64" width="370" height="20" style="ValueCell"/>
+                <textFieldExpression><![CDATA[$F{nomServiceEmploye}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="0" y="84" width="185" height="20" style="LabelCell"/>
+                <text><![CDATA[Departement]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="185" y="84" width="370" height="20" style="ValueCell"/>
+                <textFieldExpression><![CDATA[$F{nomDepartementEmploye}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="0" y="104" width="185" height="20" style="LabelCell"/>
+                <text><![CDATA[Agence]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="185" y="104" width="370" height="20" style="ValueCell"/>
+                <textFieldExpression><![CDATA[$F{nomAgenceEmploye}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="0" y="124" width="185" height="20" style="LabelCell"/>
+                <text><![CDATA[Fonction]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="185" y="124" width="370" height="20" style="ValueCell"/>
+                <textFieldExpression><![CDATA[$F{fonctionEmploye}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="0" y="144" width="185" height="20" style="LabelCell"/>
+                <text><![CDATA[Telephone mobile]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="185" y="144" width="370" height="20" style="ValueCell"/>
+                <textFieldExpression><![CDATA[$F{telephoneMobileEmploye}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="0" y="164" width="185" height="20" style="LabelCell"/>
+                <text><![CDATA[Plateforme]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="185" y="164" width="370" height="20" style="ValueCell"/>
+                <textFieldExpression><![CDATA[$F{nomPlateforme}]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="0" y="184" width="185" height="20" style="LabelCell"/>
+                <text><![CDATA[Statut / Priorite]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="185" y="184" width="370" height="20" style="ValueCell"/>
+                <textFieldExpression><![CDATA[
+($F{statutHabilitation} == null ? "" : $F{statutHabilitation})
++ (($F{statutHabilitation} == null || $F{statutHabilitation}.isEmpty() || $F{priorite} == null || $F{priorite}.isEmpty()) ? "" : " / ")
++ ($F{priorite} == null ? "" : $F{priorite})
+                ]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="0" y="204" width="185" height="36" style="LabelCell"/>
+                <text><![CDATA[Motif]]></text>
+            </staticText>
+            <textField textAdjust="StretchHeight">
+                <reportElement x="185" y="204" width="370" height="36" style="ValueCell"/>
+                <textElement verticalAlignment="Top"/>
+                <textFieldExpression><![CDATA[$F{motif}]]></textFieldExpression>
+            </textField>
+
+            <rectangle>
+                <reportElement x="0" y="260" width="555" height="20" style="SectionTitle"/>
+            </rectangle>
+            <staticText>
+                <reportElement x="10" y="264" width="420" height="14"/>
+                <text><![CDATA[DEPARTEMENTS / SERVICES SIGNATAIRES (CIRCUIT PLATEFORME)]]></text>
+            </staticText>
+
+            <staticText>
+                <reportElement x="0" y="284" width="255" height="20" mode="Opaque" backcolor="#DCE8F6" forecolor="#1F3552"/>
+                <textElement textAlignment="Center">
+                    <font size="9" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Nom departement / service]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="255" y="284" width="300" height="20" mode="Opaque" backcolor="#DCE8F6" forecolor="#1F3552"/>
+                <textElement textAlignment="Center">
+                    <font size="9" isBold="true"/>
+                </textElement>
+                <text><![CDATA[Avis]]></text>
+            </staticText>
+
+            <componentElement>
+                <reportElement x="0" y="304" width="555" height="210"/>
+                <jr:table xmlns:jr="http://jasperreports.sourceforge.net/jasperreports/components"
+                          xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports/components http://jasperreports.sourceforge.net/xsd/components.xsd">
+                    <datasetRun subDataset="SignatairesDataset">
+                        <dataSourceExpression><![CDATA[$P{SIGNATAIRES_DATA_SOURCE}]]></dataSourceExpression>
+                    </datasetRun>
+                    <jr:column width="255">
+                        <jr:detailCell height="22">
+                            <textField textAdjust="StretchHeight">
+                                <reportElement x="0" y="0" width="255" height="22" style="SignRow"/>
+                                <textElement verticalAlignment="Middle"/>
+                                <textFieldExpression><![CDATA[$F{nomSignataire}]]></textFieldExpression>
+                            </textField>
+                        </jr:detailCell>
+                    </jr:column>
+                    <jr:column width="300">
+                        <jr:detailCell height="22">
+                            <textField textAdjust="StretchHeight">
+                                <reportElement x="0" y="0" width="300" height="22" style="SignRow"/>
+                                <textElement verticalAlignment="Middle"/>
+                                <textFieldExpression><![CDATA[$F{avis}]]></textFieldExpression>
+                            </textField>
+                        </jr:detailCell>
+                    </jr:column>
+                </jr:table>
+            </componentElement>
+        </band>
+    </detail>
+
+</jasperReport>
