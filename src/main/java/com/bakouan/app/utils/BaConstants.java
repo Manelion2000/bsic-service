@@ -11,6 +11,7 @@ public class BaConstants {
      */
     public static class URL {
         public static final  String BASE_URL = "/api";
+        public static final String PUBLIC = "/public";
         public static final String PROFIL = "/profils";
         public static final String ROLE = "/roles";
         public static final String DOCUMENT = "/documents";

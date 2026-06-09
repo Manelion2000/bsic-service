@@ -78,6 +78,7 @@ public class BaUserService {
      * @return user
      */
     public BaUserDto createUser(final BaUserDto uDto) {
+        BaUser currentUser = requireUserManager();
         log.info("Création d'un compte utilisateur.");
         logService.log(new BaLogDto(EAction.C, "Utilisateurs : " + uDto.getUsername()));
         // Assigner l'email comme nom d'utilisateur (priorite email, sinon email pro)
@@ -110,6 +111,7 @@ public class BaUserService {
         user.setId(BaUtils.randomUUID());
         hydrateUserRelations(user, uDto);
         validateHierarchyRules(user);
+        validateUserManagementScope(currentUser, user);
         String userPassword="1234";
         user.setPassword(this.passwordEncoder.encode(userPassword));
         user.setResetKey(null);
@@ -132,6 +134,7 @@ public class BaUserService {
      * @param uDto DTO Utilisateur
      */
     public void updateUser(final String id, final BaUserDto uDto) {
+        BaUser currentUser = requireUserManager();
         log.info("Met à jour les informations d'un compte.");
         logService.log(new BaLogDto(EAction.U, "Utilisateurs : " + uDto.getUsername()));
 
@@ -174,6 +177,7 @@ public class BaUserService {
         }
         hydrateUserRelations(user, uDto);
         validateHierarchyRules(user);
+        validateUserManagementScope(currentUser, user);
         user = this.userRepository.save(user);
         this.mapper.maps(user);
     }
@@ -184,6 +188,7 @@ public class BaUserService {
      * @param id identifiant de l'utilisateur
      */
     public void doDeleteUser(final String id) {
+        BaUser currentUser = requireUserManager();
         logService.log(new BaLogDto(EAction.D, "Utilisateurs : " + id));
 
         log.info("Supprime un compte utilisateur. " + id);
@@ -191,7 +196,11 @@ public class BaUserService {
         // donc inutile d'utiliser un optional, encore.
         this.userRepository.findById(id)
                 .ifPresent(u -> {
+                    validateUserManagementScope(currentUser, u);
+                    ensureNotSelfAction(currentUser, u, "desactiver");
                     u.setStatut(EStatut.D);
+                    u.setActivated(Boolean.FALSE);
+                    u.setLocked(Boolean.TRUE);
                     this.userRepository.save(u);
                 });
     }
@@ -306,8 +315,10 @@ public class BaUserService {
     }
 
     public BaUserDto addRoleToUser(String userId, String roleId) {
+        BaUser currentUser = requireUserManager();
         BaUser user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Utilisateur introuvable avec l'ID : " + userId));
+        validateUserManagementScope(currentUser, user);
 
         BaRole role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rôle introuvable avec l'ID : " + roleId));
@@ -329,8 +340,10 @@ public class BaUserService {
     }
 
     public BaUserDto removeRoleFromUser(String userId, String roleId) {
+        BaUser currentUser = requireUserManager();
         BaUser user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Utilisateur introuvable avec l'ID : " + userId));
+        validateUserManagementScope(currentUser, user);
 
         BaRole role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rôle introuvable avec l'ID : " + roleId));
@@ -746,13 +759,97 @@ public class BaUserService {
      * @param idUser identifiant de l'utilisateur
      */
     public void activateUser(final String idUser) {
+        BaUser currentUser = requireUserManager();
         log.info("Try to activate user : {}", idUser);
         logService.log(new BaLogDto(EAction.U, "Activate un utilisateur " + idUser));
 
         this.userRepository.findById(idUser)
                 .ifPresent(usr -> {
+                    validateUserManagementScope(currentUser, usr);
                     usr.setActivated(Boolean.TRUE);
+                    usr.setLocked(Boolean.FALSE);
+                    usr.setStatut(EStatut.A);
                     userRepository.save(usr);
                 });
+    }
+
+    public void deactivateUser(final String idUser) {
+        BaUser currentUser = requireUserManager();
+        log.info("Try to deactivate user : {}", idUser);
+        logService.log(new BaLogDto(EAction.U, "Deactivate un utilisateur " + idUser));
+
+        BaUser user = this.userRepository.findById(idUser)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable"));
+        validateUserManagementScope(currentUser, user);
+        ensureNotSelfAction(currentUser, user, "desactiver");
+        user.setActivated(Boolean.FALSE);
+        user.setLocked(Boolean.TRUE);
+        userRepository.save(user);
+    }
+
+    private BaUser requireUserManager() {
+        BaUser currentUser = getCurrentUserEntity()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Utilisateur non connecte."));
+        if (isAdministrator(currentUser) || currentUser.getFonction() == EFonctionEmploye.CHEF_SERVICE) {
+            return currentUser;
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "Action reservee aux administrateurs et aux chefs de service.");
+    }
+
+    private Optional<BaUser> getCurrentUserEntity() {
+        Optional<String> usernameFromSecurityContext = BaAuditorAwareImpl.getCurrentUserLogin();
+        if (usernameFromSecurityContext.isPresent()) {
+            Optional<BaUser> fromContext = userRepository.findOneByUsernameIgnoreCaseAndStatut(
+                    usernameFromSecurityContext.get(), EStatut.A);
+            if (fromContext.isPresent()) {
+                return fromContext;
+            }
+        }
+        final UserDetails userDetails = userDetailsFacade.getUserDetails();
+        if (userDetails == null || userDetails.getUsername() == null) {
+            return Optional.empty();
+        }
+        return userRepository.findOneByUsernameIgnoreCaseAndStatut(userDetails.getUsername(), EStatut.A);
+    }
+
+    private void validateUserManagementScope(final BaUser actor, final BaUser target) {
+        if (actor == null || target == null || isAdministrator(actor)) {
+            return;
+        }
+        if (actor.getFonction() != EFonctionEmploye.CHEF_SERVICE) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Action reservee aux administrateurs et aux chefs de service.");
+        }
+        if (target.getFonction() != EFonctionEmploye.AGENT) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Un chef de service ne peut gerer que les agents.");
+        }
+        if (actor.getService() == null || target.getService() == null
+                || !Objects.equals(actor.getService().getId(), target.getService().getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Un chef de service ne peut gerer que les agents de son service.");
+        }
+    }
+
+    private void ensureNotSelfAction(final BaUser actor, final BaUser target, final String action) {
+        if (actor != null && target != null && Objects.equals(actor.getId(), target.getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Vous ne pouvez pas " + action + " votre propre compte.");
+        }
+    }
+
+    private boolean isAdministrator(final BaUser user) {
+        if (user == null || user.getRoles() == null) {
+            return false;
+        }
+        return user.getRoles().stream().anyMatch(role -> {
+            String code = role.getCode() == null ? "" : role.getCode().toUpperCase();
+            String libelle = role.getLibelle() == null ? "" : role.getLibelle().toUpperCase();
+            return code.contains("ADMINISTRATEUR")
+                    || code.contains("ADMIN")
+                    || libelle.contains("ADMINISTRATEUR")
+                    || libelle.contains("ADMIN");
+        });
     }
 }

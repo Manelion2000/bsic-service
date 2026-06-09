@@ -317,6 +317,22 @@ public class BaUserController {
         return new ResponseEntity<>("L'activation a reussi", HttpStatus.OK);
     }
 
+    @PutMapping(BaConstants.URL.USER + "/{id}/activer")
+    public ResponseEntity<BaUserDto> activerUser(@PathVariable(name = "id") final String idUser) {
+        userService.activateUser(idUser);
+        return userService.getOneById(idUser)
+                .map(ResponseEntity::ok)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable"));
+    }
+
+    @PutMapping(BaConstants.URL.USER + "/{id}/desactiver")
+    public ResponseEntity<BaUserDto> desactiverUser(@PathVariable(name = "id") final String idUser) {
+        userService.deactivateUser(idUser);
+        return userService.getOneById(idUser)
+                .map(ResponseEntity::ok)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Utilisateur introuvable"));
+    }
+
     // ===== GESTION DES RÔLES UTILISATEURS =====
 
     /**

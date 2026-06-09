@@ -80,6 +80,16 @@ public interface BaBusinessService {
     List<BaAnnuaireDepartementDto> getAnnuaire(String departementId, String serviceId, String agenceId);
 
     /**
+     * Recuperer l'annuaire public avec uniquement les informations professionnelles exposables.
+     *
+     * @param departementId identifiant du departement (optionnel)
+     * @param serviceId identifiant du service (optionnel)
+     * @param agenceId identifiant de l'agence (optionnel)
+     * @return l'annuaire public organise par departement
+     */
+    List<BaPublicAnnuaireDepartementDto> getPublicAnnuaire(String departementId, String serviceId, String agenceId);
+
+    /**
      * Lister les plateformes actives.
      *
      * @return la liste des plateformes

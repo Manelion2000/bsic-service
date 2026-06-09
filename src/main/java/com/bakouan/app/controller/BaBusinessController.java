@@ -31,6 +31,30 @@ public class BaBusinessController {
     private final BaAutorisationSortieService autorisationSortieService;
     private final BaRepriseServiceManager repriseServiceManager;
 
+    @GetMapping(BaConstants.URL.PUBLIC + BaConstants.URL.ANNUAIRE + BaConstants.URL.SERVICE)
+    public List<BaServiceDto> getPublicServices() {
+        return businessService.getAllServices();
+    }
+
+    @GetMapping(BaConstants.URL.PUBLIC + BaConstants.URL.ANNUAIRE + BaConstants.URL.DEPARTEMENT)
+    public List<BaDepartementDto> getPublicDepartements() {
+        return businessService.getAllDepartements();
+    }
+
+    @GetMapping(BaConstants.URL.PUBLIC + BaConstants.URL.ANNUAIRE + BaConstants.URL.AGENCE)
+    public List<BaAgenceDto> getPublicAgences() {
+        return businessService.getAllAgences();
+    }
+
+    @Operation(summary = "Annuaire public", description = "Retourne la liste publique des agents avec les contacts professionnels uniquement.")
+    @GetMapping(BaConstants.URL.PUBLIC + BaConstants.URL.ANNUAIRE + BaConstants.URL.ANNUAIRE_LIST)
+    public List<BaPublicAnnuaireDepartementDto> getPublicAnnuaire(
+            @Parameter(description = "Filtrer par departement") @RequestParam(value = "departementId", required = false) String departementId,
+            @Parameter(description = "Filtrer par service") @RequestParam(value = "serviceId", required = false) String serviceId,
+            @Parameter(description = "Filtrer par agence") @RequestParam(value = "agenceId", required = false) String agenceId) {
+        return businessService.getPublicAnnuaire(departementId, serviceId, agenceId);
+    }
+
     @GetMapping(BaConstants.URL.ANNUAIRE + BaConstants.URL.SERVICE)
     public List<BaServiceDto> getAllServices() {
         return businessService.getAllServices();

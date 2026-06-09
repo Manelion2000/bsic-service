@@ -249,6 +249,7 @@ public class BaBusinessServiceImpl implements BaBusinessService {
             agentDto.setNom(employe.getNom());
             agentDto.setPrenom(employe.getPrenom());
             agentDto.setFonction(employe.getFonction() == null ? null : employe.getFonction().name());
+            agentDto.setEmail(BaUtils.isEmpty(employe.getEmailPro()) ? employe.getEmail() : employe.getEmailPro());
             agentDto.setNumeroPoste(employe.getTelephoneFixe());
             agentDto.setTelephoneSecondaire(employe.getTelephoneMobile());
             agentDto.setIdService(employe.getService() == null ? null : employe.getService().getId());
@@ -260,6 +261,85 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
         result.addAll(departements.values());
         return result;
+    }
+
+    @Override
+    public List<BaPublicAnnuaireDepartementDto> getPublicAnnuaire(final String departementId,
+                                                                  final String serviceId,
+                                                                  final String agenceId) {
+        List<BaUser> employes = userRepository.findByStatut(EStatut.A);
+        List<BaUser> filtered = employes.stream()
+                .filter(employe -> BaUtils.isEmpty(departementId) ||
+                        (employe.getDepartement() != null && departementId.equals(employe.getDepartement().getId())))
+                .filter(employe -> BaUtils.isEmpty(serviceId) ||
+                        (employe.getService() != null && serviceId.equals(employe.getService().getId())))
+                .filter(employe -> BaUtils.isEmpty(agenceId) ||
+                        (employe.getAgence() != null && agenceId.equals(employe.getAgence().getId())))
+                .sorted((a, b) -> {
+                    String depA = a.getDepartement() == null ? "ZZZ" : a.getDepartement().getNom();
+                    String depB = b.getDepartement() == null ? "ZZZ" : b.getDepartement().getNom();
+                    int cmp = depA.compareToIgnoreCase(depB);
+                    if (cmp != 0) {
+                        return cmp;
+                    }
+                    String nomA = a.getNom() == null ? "" : a.getNom();
+                    String nomB = b.getNom() == null ? "" : b.getNom();
+                    cmp = nomA.compareToIgnoreCase(nomB);
+                    if (cmp != 0) {
+                        return cmp;
+                    }
+                    String prenomA = a.getPrenom() == null ? "" : a.getPrenom();
+                    String prenomB = b.getPrenom() == null ? "" : b.getPrenom();
+                    return prenomA.compareToIgnoreCase(prenomB);
+                })
+                .collect(Collectors.toList());
+
+        List<BaPublicAnnuaireDepartementDto> result = new ArrayList<>();
+        Map<String, BaPublicAnnuaireDepartementDto> departements = new LinkedHashMap<>();
+
+        for (BaUser employe : filtered) {
+            String depId = employe.getDepartement() == null ? null : employe.getDepartement().getId();
+            String depNom = employe.getDepartement() == null ? "Non renseigne" : employe.getDepartement().getNom();
+            String depKey = depId == null ? "__NONE__" : depId;
+
+            BaPublicAnnuaireDepartementDto departementDto = departements.get(depKey);
+            if (departementDto == null) {
+                departementDto = new BaPublicAnnuaireDepartementDto();
+                departementDto.setId(depId);
+                departementDto.setNom(depNom);
+                departementDto.setAgents(new ArrayList<>());
+                departements.put(depKey, departementDto);
+            }
+
+            BaPublicAnnuaireAgentDto agentDto = new BaPublicAnnuaireAgentDto();
+            agentDto.setNom(employe.getNom());
+            agentDto.setPrenom(employe.getPrenom());
+            agentDto.setFonction(employe.getFonction() == null ? null : employe.getFonction().name());
+            agentDto.setEmail(resolvePublicBsicEmail(employe));
+            agentDto.setNumeroPoste(employe.getTelephoneFixe());
+            agentDto.setIdService(employe.getService() == null ? null : employe.getService().getId());
+            agentDto.setNomService(employe.getService() == null ? null : employe.getService().getNom());
+            agentDto.setIdAgence(employe.getAgence() == null ? null : employe.getAgence().getId());
+            agentDto.setNomAgence(employe.getAgence() == null ? null : employe.getAgence().getNom());
+            departementDto.getAgents().add(agentDto);
+        }
+
+        result.addAll(departements.values());
+        return result;
+    }
+
+    private String resolvePublicBsicEmail(final BaUser employe) {
+        if (isBsicEmail(employe.getEmailPro())) {
+            return employe.getEmailPro();
+        }
+        if (isBsicEmail(employe.getEmail())) {
+            return employe.getEmail();
+        }
+        return null;
+    }
+
+    private boolean isBsicEmail(final String email) {
+        return email != null && email.trim().toLowerCase().endsWith("@bsic.bf");
     }
 
     @Override

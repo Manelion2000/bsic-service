@@ -124,6 +124,7 @@ public class SecurityConfigForProd {
                     .requestMatchers(BaConstants.URL.BASE_URL + BaConstants.URL.LOGOUT).permitAll()
                     .requestMatchers(HttpMethod.GET, BaConstants.URL.CSRF_TOKEN).permitAll()
                     .requestMatchers(HttpMethod.GET, BaConstants.URL.BASE_URL + BaConstants.URL.DOCUMENT + "/**").permitAll()
+                    .requestMatchers(HttpMethod.GET, BaConstants.URL.BASE_URL + BaConstants.URL.PUBLIC + "/**").permitAll()
                     .requestMatchers(BaConstants.URL.BASE_URL + "/reset/**").permitAll()
                     .requestMatchers(BaConstants.URL.BASE_URL + "/**").authenticated();
         });
