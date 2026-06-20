@@ -44,6 +44,8 @@ public class BaConstants {
         public static final String REPRISE_SERVICE = "/reprises-service";
         public static final String REPRISE_SERVICE_MES_DEMANDES = "/reprises-service/mes-demandes";
         public static final String REPRISE_SERVICE_A_VALIDER = "/reprises-service/a-valider";
+        public static final String VALIDATION_DELEGATION = "/validation-delegations";
+        public static final String DGA_POLE_VALIDATEUR = "/dga-pole-validateurs";
     }
 
     /**

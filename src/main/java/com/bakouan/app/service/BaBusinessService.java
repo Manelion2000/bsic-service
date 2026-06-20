@@ -112,32 +112,6 @@ public interface BaBusinessService {
      */
     BaPlateformeDto updatePlateforme(String id, BaPlateformeDto dto);
 
-    /**
-     * Creer une definition d'etape (departement/service).
-     *
-     * @param dto donnees de l'etape
-     * @return l'etape creee
-     */
-    BaEtapeDefinitionDto createEtapeDefinition(BaEtapeDefinitionDto dto);
-    /**
-     * Mettre a jour une definition d'etape.
-     *
-     * @param id identifiant de l'etape
-     * @param dto nouvelles donnees
-     * @return l'etape mise a jour
-     */
-    BaEtapeDefinitionDto updateEtapeDefinition(String id, BaEtapeDefinitionDto dto);
-
-    /**
-     * Lister les definitions d'etape avec filtres optionnels.
-     *
-     * @param type type d'etape (optionnel)
-     * @param departementId departement (optionnel)
-     * @param serviceId service (optionnel)
-     * @return la liste des etapes definies
-     */
-    List<BaEtapeDefinitionDto> getEtapeDefinitions(com.bakouan.app.enums.EHabilitationEtapeType type, String departementId, String serviceId);
-
     List<BaFicheHabilitationDto> getAllFichesHabilitation();
 
     /**
@@ -188,14 +162,6 @@ public interface BaBusinessService {
      * @return la liste des etapes de la fiche
      */
     List<BaFicheHabilitationEtapeDto> initFicheEtapesFromCircuit(String ficheId);
-
-    /**
-     * Ajouter une etape de workflow a une fiche.
-     *
-     * @param dto donnees de l'etape
-     * @return l'etape creee
-     */
-    BaFicheHabilitationEtapeDto addEtape(BaFicheHabilitationEtapeDto dto);
 
     /**
      * Mettre a jour le statut d'une etape.
@@ -289,4 +255,20 @@ public interface BaBusinessService {
      * @return l'action mise a jour
      */
     BaReunionActionDto updateReunionAction(String id, BaReunionActionDto dto);
+
+    List<BaValidationDelegationDto> getValidationDelegations();
+
+    BaValidationDelegationDto createValidationDelegation(BaValidationDelegationDto dto);
+
+    BaValidationDelegationDto updateValidationDelegation(String id, BaValidationDelegationDto dto);
+
+    void desactiverValidationDelegation(String id);
+
+    List<BaDgaPoleValidateurDto> getDgaPoleValidateurs();
+
+    BaDgaPoleValidateurDto createDgaPoleValidateur(BaDgaPoleValidateurDto dto);
+
+    BaDgaPoleValidateurDto updateDgaPoleValidateur(String id, BaDgaPoleValidateurDto dto);
+
+    void desactiverDgaPoleValidateur(String id);
 }

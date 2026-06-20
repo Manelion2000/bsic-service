@@ -120,23 +120,6 @@ public class BaBusinessController {
         return ResponseEntity.ok(businessService.updatePlateforme(id, dto));
     }
 
-    @PostMapping(BaConstants.URL.HABILITATION + BaConstants.URL.HABILITATION_ETAPES_DEF)
-    public ResponseEntity<BaEtapeDefinitionDto> createEtapeDefinition(@RequestBody @Valid BaEtapeDefinitionDto dto) {
-        return new ResponseEntity<>(businessService.createEtapeDefinition(dto), HttpStatus.CREATED);
-    }
-    @PutMapping(BaConstants.URL.HABILITATION + BaConstants.URL.HABILITATION_ETAPES_DEF + "/{id}")
-    public ResponseEntity<BaEtapeDefinitionDto> updateEtapeDefinition(@PathVariable String id, @RequestBody @Valid BaEtapeDefinitionDto dto) {
-        return ResponseEntity.ok(businessService.updateEtapeDefinition(id, dto));
-    }
-
-    @GetMapping(BaConstants.URL.HABILITATION + BaConstants.URL.HABILITATION_ETAPES_DEF)
-    public List<BaEtapeDefinitionDto> getEtapeDefinitions(
-            @RequestParam(value = "type", required = false) EHabilitationEtapeType type,
-            @RequestParam(value = "departementId", required = false) String departementId,
-            @RequestParam(value = "serviceId", required = false) String serviceId) {
-        return businessService.getEtapeDefinitions(type, departementId, serviceId);
-    }
-
     @GetMapping(BaConstants.URL.HABILITATION + BaConstants.URL.FICHE_HABILITATION)
     public List<BaFicheHabilitationDto> getAllFichesHabilitation() {
         return businessService.getAllFichesHabilitation();
@@ -175,11 +158,6 @@ public class BaBusinessController {
     @PostMapping(BaConstants.URL.HABILITATION + BaConstants.URL.FICHE_HABILITATION_ETAPES_INIT_CIRCUIT)
     public List<BaFicheHabilitationEtapeDto> initFicheEtapesFromCircuit(@PathVariable("id") String ficheId) {
         return businessService.initFicheEtapesFromCircuit(ficheId);
-    }
-
-    @PostMapping(BaConstants.URL.HABILITATION + BaConstants.URL.FICHE_HABILITATION_ETAPE)
-    public ResponseEntity<BaFicheHabilitationEtapeDto> addEtape(@RequestBody BaFicheHabilitationEtapeDto dto) {
-        return new ResponseEntity<>(businessService.addEtape(dto), HttpStatus.CREATED);
     }
 
     @PutMapping(BaConstants.URL.HABILITATION + BaConstants.URL.FICHE_HABILITATION_ETAPE + "/{id}/status")
@@ -467,5 +445,52 @@ public class BaBusinessController {
             @ModelAttribute BaRhDemandesFilterDto filter,
             org.springframework.data.domain.Pageable pageable) {
         return repriseServiceManager.getSuivi(filter, pageable);
+    }
+
+    @GetMapping(BaConstants.URL.VALIDATION_DELEGATION)
+    public List<BaValidationDelegationDto> getValidationDelegations() {
+        return businessService.getValidationDelegations();
+    }
+
+    @PostMapping(BaConstants.URL.VALIDATION_DELEGATION)
+    public ResponseEntity<BaValidationDelegationDto> createValidationDelegation(
+            @RequestBody @Valid BaValidationDelegationDto dto) {
+        return new ResponseEntity<>(businessService.createValidationDelegation(dto), HttpStatus.CREATED);
+    }
+
+    @PutMapping(BaConstants.URL.VALIDATION_DELEGATION + "/{id}")
+    public ResponseEntity<BaValidationDelegationDto> updateValidationDelegation(
+            @PathVariable String id,
+            @RequestBody @Valid BaValidationDelegationDto dto) {
+        return ResponseEntity.ok(businessService.updateValidationDelegation(id, dto));
+    }
+
+    @DeleteMapping(BaConstants.URL.VALIDATION_DELEGATION + "/{id}")
+    public ResponseEntity<Void> desactiverValidationDelegation(@PathVariable String id) {
+        businessService.desactiverValidationDelegation(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping(BaConstants.URL.DGA_POLE_VALIDATEUR)
+    public List<BaDgaPoleValidateurDto> getDgaPoleValidateurs() {
+        return businessService.getDgaPoleValidateurs();
+    }
+
+    @PostMapping(BaConstants.URL.DGA_POLE_VALIDATEUR)
+    public ResponseEntity<BaDgaPoleValidateurDto> createDgaPoleValidateur(@RequestBody @Valid BaDgaPoleValidateurDto dto) {
+        return new ResponseEntity<>(businessService.createDgaPoleValidateur(dto), HttpStatus.CREATED);
+    }
+
+    @PutMapping(BaConstants.URL.DGA_POLE_VALIDATEUR + "/{id}")
+    public ResponseEntity<BaDgaPoleValidateurDto> updateDgaPoleValidateur(
+            @PathVariable String id,
+            @RequestBody @Valid BaDgaPoleValidateurDto dto) {
+        return ResponseEntity.ok(businessService.updateDgaPoleValidateur(id, dto));
+    }
+
+    @DeleteMapping(BaConstants.URL.DGA_POLE_VALIDATEUR + "/{id}")
+    public ResponseEntity<Void> desactiverDgaPoleValidateur(@PathVariable String id) {
+        businessService.desactiverDgaPoleValidateur(id);
+        return ResponseEntity.noContent().build();
     }
 }

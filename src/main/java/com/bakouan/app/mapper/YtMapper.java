@@ -76,10 +76,17 @@ public interface YtMapper {
     @Mapping(target = "departement", ignore = true)
     BaService maps(BaServiceDto dto);
 
-    @Mappings({})
+    @Mappings({
+            @Mapping(target = "idParentDepartement", source = "parentDepartement.id"),
+            @Mapping(target = "nomParentDepartement", source = "parentDepartement.nom"),
+            @Mapping(target = "idDgaValidateur", source = "dgaValidateur.id"),
+            @Mapping(target = "nomDgaValidateur", expression = "java(entity.getDgaValidateur() == null ? null : entity.getDgaValidateur().getNom() + \" \" + entity.getDgaValidateur().getPrenom())")
+    })
     BaDepartementDto maps(BaDepartement entity);
 
     @InheritInverseConfiguration
+    @Mapping(target = "parentDepartement", ignore = true)
+    @Mapping(target = "dgaValidateur", ignore = true)
     BaDepartement maps(BaDepartementDto dto);
 
     @Mappings({
@@ -103,19 +110,6 @@ public interface YtMapper {
     @InheritInverseConfiguration
     @Mapping(target = "circuit", ignore = true)
     BaPlateforme maps(BaPlateformeDto dto);
-
-    @Mappings({
-            @Mapping(target = "idDepartement", source = "departement.id"),
-            @Mapping(target = "nomDepartement", source = "departement.nom"),
-            @Mapping(target = "idService", source = "service.id"),
-            @Mapping(target = "nomService", source = "service.nom")
-    })
-    BaEtapeDefinitionDto maps(BaEtapeDefinition entity);
-
-    @InheritInverseConfiguration
-    @Mapping(target = "departement", ignore = true)
-    @Mapping(target = "service", ignore = true)
-    BaEtapeDefinition maps(BaEtapeDefinitionDto dto);
 
     @Mappings({
             @Mapping(target = "idEmploye", source = "employe.id"),
@@ -142,13 +136,6 @@ public interface YtMapper {
 
     @Mappings({
             @Mapping(target = "idFiche", source = "fiche.id"),
-            @Mapping(target = "idEtapeDefinition", source = "etapeDefinition.id"),
-            @Mapping(target = "typeEtape", source = "etapeDefinition.type"),
-            @Mapping(target = "idDepartement", source = "etapeDefinition.departement.id"),
-            @Mapping(target = "nomDepartement", source = "etapeDefinition.departement.nom"),
-            @Mapping(target = "idService", source = "etapeDefinition.service.id"),
-            @Mapping(target = "nomService", source = "etapeDefinition.service.nom"),
-            @Mapping(target = "fonctionRequise", source = "etapeDefinition.fonctionRequise"),
             @Mapping(target = "idValidateur", source = "validateur.id"),
             @Mapping(target = "nomCompletValidateur", expression = "java(entity.getValidateur() == null ? null : entity.getValidateur().getNom() + \" \" + entity.getValidateur().getPrenom())"),
             @Mapping(target = "idDepartementValidateur", source = "validateur.departement.id"),

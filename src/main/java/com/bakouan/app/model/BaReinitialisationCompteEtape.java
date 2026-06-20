@@ -27,10 +27,6 @@ public class BaReinitialisationCompteEtape extends BaAbstractAuditingEntity {
     @JoinColumn(name = "validateur_id")
     private BaUser validateur;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "etape_definition_id")
-    private BaEtapeDefinition etapeDefinition;
-
     @Column(name = "ordre")
     private Integer ordre;
 

@@ -28,10 +28,6 @@ public class BaFicheHabilitationEtape extends BaAbstractAuditingEntity {
     @JoinColumn(name = "validateur_id")
     private BaUser validateur;
 
-    @ManyToOne
-    @JoinColumn(name = "etape_definition_id")
-    private BaEtapeDefinition etapeDefinition;
-
     @Column(name = "ordre")
     private Integer ordre;
 

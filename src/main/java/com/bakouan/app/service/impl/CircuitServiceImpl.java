@@ -289,6 +289,10 @@ public class CircuitServiceImpl implements CircuitService {
         if (etape.getOrdre() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "L'ordre de l'etape est obligatoire.");
         }
+        if (BaUtils.isEmpty(etape.getRoleId()) && BaUtils.isEmpty(etape.getFonctionRequise())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Le role validateur ou le role metier de l'etape est obligatoire.");
+        }
         EHabilitationEtapeType type = etape.getType() == null ? EHabilitationEtapeType.DEPARTEMENT : etape.getType();
         if (type == EHabilitationEtapeType.SERVICE) {
             if (BaUtils.isEmpty(etape.getServiceId())) {

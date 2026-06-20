@@ -9,13 +9,14 @@ import lombok.Data;
 public class BaFicheHabilitationEtapeDto {
     private String id;
     private String idFiche;
-    private String idEtapeDefinition;
     private EHabilitationEtapeType typeEtape;
     private String idDepartement;
     private String nomDepartement;
     private String idService;
     private String nomService;
     private EFonctionEmploye fonctionRequise;
+    private String idRole;
+    private String roleLibelle;
     private String idValidateur;
     private String nomCompletValidateur;
     private String idDepartementValidateur;

@@ -97,27 +97,27 @@ public class BaUser extends BaAbstractAuditingEntity {
     @Column(name = "telephone_mobile")
     private String telephoneMobile;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "profil_uuid")
     private BaProfil profil;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "service_id")
     private BaService service;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "departement_id")
     private BaDepartement departement;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "agence_id")
     private BaAgence agence;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "superieur_id")
     private BaUser superieur;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "superieur_secondaire_id")
     private BaUser superieurSecondaire;
 

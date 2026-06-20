@@ -3,6 +3,7 @@ package com.bakouan.app.service.impl;
 import com.bakouan.app.dto.*;
 import com.bakouan.app.enums.EAction;
 import com.bakouan.app.enums.ECircuitStatut;
+import com.bakouan.app.enums.EDgaPole;
 import com.bakouan.app.enums.EFonctionEmploye;
 import com.bakouan.app.enums.EHabilitationEtapeType;
 import com.bakouan.app.enums.EHabilitationCompteStatut;
@@ -19,6 +20,7 @@ import com.bakouan.app.security.BaRolesConstants;
 import com.bakouan.app.service.BaBusinessService;
 import com.bakouan.app.service.BaLogService;
 import com.bakouan.app.security.BaUserService;
+import com.bakouan.app.utils.BaConstants;
 import com.bakouan.app.utils.BaUtils;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -29,11 +31,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
@@ -53,7 +57,6 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
 
     private final BaPlateformeRepository plateformeRepository;
-    private final BaEtapeDefinitionRepository etapeDefinitionRepository;
     private final BaCircuitRepository circuitRepository;
     private final BaCircuitEtapeRepository circuitEtapeRepository;
     private final BaFicheHabilitationRepository ficheHabilitationRepository;
@@ -63,6 +66,8 @@ public class BaBusinessServiceImpl implements BaBusinessService {
     private final BaReinitialisationCompteRepository reinitialisationCompteRepository;
     private final BaReinitialisationCompteEtapeRepository reinitialisationCompteEtapeRepository;
     private final BaReinitialisationCompteTraitementRepository reinitialisationCompteTraitementRepository;
+    private final BaValidationDelegationRepository validationDelegationRepository;
+    private final BaDgaPoleValidateurRepository dgaPoleValidateurRepository;
 
     private final BaReunionRepository reunionRepository;
     private final BaReunionParticipantRepository reunionParticipantRepository;
@@ -115,7 +120,9 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
     @Override
     public List<BaDepartementDto> getAllDepartements() {
-        return departementRepository.findByStatut(EStatut.A).stream().map(mapper::maps).collect(Collectors.toList());
+        return departementRepository.findByStatut(EStatut.A).stream()
+                .map(this::toDepartementDto)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -132,7 +139,9 @@ public class BaBusinessServiceImpl implements BaBusinessService {
         }
         BaDepartement entity = mapper.maps(dto);
         entity.setId(BaUtils.randomUUID());
-        return mapper.maps(departementRepository.save(entity));
+        entity.setParentDepartement(resolveParentDepartement(dto.getIdParentDepartement(), null));
+        entity.setDgaValidateur(resolveDgaValidateur(dto.getIdDgaValidateur()));
+        return toDepartementDto(departementRepository.save(entity));
     }
 
     @Override
@@ -146,7 +155,10 @@ public class BaBusinessServiceImpl implements BaBusinessService {
         }
         entity.setCode(dto.getCode());
         entity.setNom(dto.getNom());
-        return mapper.maps(departementRepository.save(entity));
+        entity.setDgaPole(dto.getDgaPole());
+        entity.setParentDepartement(resolveParentDepartement(dto.getIdParentDepartement(), id));
+        entity.setDgaValidateur(resolveDgaValidateur(dto.getIdDgaValidateur()));
+        return toDepartementDto(departementRepository.save(entity));
     }
 
     @Override
@@ -384,104 +396,6 @@ public class BaBusinessServiceImpl implements BaBusinessService {
         return mapper.maps(plateformeRepository.save(entity));
     }
 
-    @Override
-    public BaEtapeDefinitionDto createEtapeDefinition(final BaEtapeDefinitionDto dto) {
-        if (dto == null || dto.getType() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Type d'etape obligatoire");
-        }
-        if (dto.getType() == EHabilitationEtapeType.DEPARTEMENT && BaUtils.isEmpty(dto.getIdDepartement())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Departement obligatoire pour une etape departement");
-        }
-        if (dto.getType() == EHabilitationEtapeType.SERVICE && BaUtils.isEmpty(dto.getIdService())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Service obligatoire pour une etape service");
-        }
-        if (dto.getFonctionRequise() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Fonction requise obligatoire");
-        }
-        BaEtapeDefinition entity = mapper.maps(dto);
-        entity.setId(BaUtils.randomUUID());
-        if (!BaUtils.isEmpty(dto.getIdDepartement())) {
-            BaDepartement departement = departementRepository.findById(dto.getIdDepartement())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Departement introuvable"));
-            entity.setDepartement(departement);
-            if (BaUtils.isEmpty(entity.getLibelle())) {
-                entity.setLibelle(departement.getNom());
-            }
-        }
-        if (!BaUtils.isEmpty(dto.getIdService())) {
-            BaService service = serviceRepository.findById(dto.getIdService())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Service introuvable"));
-            entity.setService(service);
-            if (BaUtils.isEmpty(entity.getLibelle())) {
-                entity.setLibelle(service.getNom());
-            }
-        }
-        return mapper.maps(etapeDefinitionRepository.save(entity));
-    }
-
-    @Override
-    public BaEtapeDefinitionDto updateEtapeDefinition(final String id, final BaEtapeDefinitionDto dto) {
-        if (dto == null || dto.getType() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Type d'etape obligatoire");
-        }
-        if (dto.getType() == EHabilitationEtapeType.DEPARTEMENT && BaUtils.isEmpty(dto.getIdDepartement())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Departement obligatoire pour une etape departement");
-        }
-        if (dto.getType() == EHabilitationEtapeType.SERVICE && BaUtils.isEmpty(dto.getIdService())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Service obligatoire pour une etape service");
-        }
-        if (dto.getFonctionRequise() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Fonction requise obligatoire");
-        }
-        BaEtapeDefinition entity = etapeDefinitionRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Etape introuvable"));
-        entity.setType(dto.getType());
-        entity.setFonctionRequise(dto.getFonctionRequise());
-        entity.setRoleCode(dto.getRoleCode());
-        entity.setLibelle(dto.getLibelle());
-        if (!BaUtils.isEmpty(dto.getIdDepartement())) {
-            BaDepartement departement = departementRepository.findById(dto.getIdDepartement())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Departement introuvable"));
-            entity.setDepartement(departement);
-            if (BaUtils.isEmpty(entity.getLibelle())) {
-                entity.setLibelle(departement.getNom());
-            }
-        } else {
-            entity.setDepartement(null);
-        }
-        if (!BaUtils.isEmpty(dto.getIdService())) {
-            BaService service = serviceRepository.findById(dto.getIdService())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Service introuvable"));
-            entity.setService(service);
-            if (BaUtils.isEmpty(entity.getLibelle())) {
-                entity.setLibelle(service.getNom());
-            }
-        } else {
-            entity.setService(null);
-        }
-        return mapper.maps(etapeDefinitionRepository.save(entity));
-    }
-
-    @Override
-    public List<BaEtapeDefinitionDto> getEtapeDefinitions(final EHabilitationEtapeType type,
-                                                         final String departementId,
-                                                         final String serviceId) {
-        if (!BaUtils.isEmpty(departementId)) {
-            return etapeDefinitionRepository.findByDepartementId(departementId)
-                    .stream().map(mapper::maps).collect(Collectors.toList());
-        }
-        if (!BaUtils.isEmpty(serviceId)) {
-            return etapeDefinitionRepository.findByServiceId(serviceId)
-                    .stream().map(mapper::maps).collect(Collectors.toList());
-        }
-        if (type != null) {
-            return etapeDefinitionRepository.findByType(type)
-                    .stream().map(mapper::maps).collect(Collectors.toList());
-        }
-        return etapeDefinitionRepository.findAll()
-                .stream().map(mapper::maps).collect(Collectors.toList());
-    }
-
     public List<BaFicheHabilitationDto> getAllFichesHabilitation() {
         return ficheHabilitationRepository.findByStatut(EStatut.A).stream()
                 .map(this::toFicheDtoWithSignataires)
@@ -519,64 +433,7 @@ public class BaBusinessServiceImpl implements BaBusinessService {
         BaFicheHabilitation saved = ficheHabilitationRepository.save(entity);
         saveFichePlateformes(saved, plateformes);
 
-        if (dto.getEtapes() != null && !dto.getEtapes().isEmpty()) {
-            List<BaCircuitEtape> configs = circuitEtapeRepository
-                    .findByCircuitIdOrderByOrdre(saved.getCircuit().getId());
-            if (configs.isEmpty()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Aucune etape configuree pour ce circuit");
-            }
-
-            java.util.Map<String, BaFicheHabilitationEtapeDto> provided = new java.util.HashMap<>();
-            for (BaFicheHabilitationEtapeDto etapeDto : dto.getEtapes()) {
-                if (etapeDto == null || BaUtils.isEmpty(etapeDto.getIdEtapeDefinition())) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chaque etape doit etre renseignee");
-                }
-                if (provided.put(etapeDto.getIdEtapeDefinition(), etapeDto) != null) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Les etapes doivent etre uniques");
-                }
-            }
-
-            if (provided.size() != configs.size()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Toutes les etapes du circuit sont obligatoires");
-            }
-
-            java.util.List<BaFicheHabilitationEtape> entities = new java.util.ArrayList<>();
-            for (BaCircuitEtape config : configs) {
-                BaEtapeDefinition definition = resolveEtapeDefinitionFromCircuitEtape(config);
-                if (definition == null || !provided.containsKey(definition.getId())) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Etape non configuree pour ce circuit");
-                }
-                BaFicheHabilitationEtape etape = new BaFicheHabilitationEtape();
-                etape.setId(BaUtils.randomUUID());
-                etape.setFiche(saved);
-                etape.setEtapeDefinition(definition);
-                etape.setOrdre(config.getOrdre());
-                etape.setStatutValidation(EHabilitationStatut.EN_ATTENTE);
-
-                BaFicheHabilitationEtapeDto etapeDto = provided.get(definition.getId());
-                if (etapeDto == null || BaUtils.isEmpty(etapeDto.getIdValidateur())) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "Le signataire est obligatoire pour chaque etape.");
-                }
-                etape.setValidateur(resolveAndValidateProvidedSigner(etapeDto.getIdValidateur(), definition));
-                entities.add(etape);
-            }
-            ficheHabilitationEtapeRepository.saveAll(entities);
-        } else {
-            // Initialise automatiquement les etapes selon le circuit choisi.
-            try {
-                initFicheEtapesFromCircuit(saved.getId());
-            } catch (ResponseStatusException ex) {
-                boolean noConfiguredSteps = ex.getStatusCode() == HttpStatus.BAD_REQUEST
-                        && ex.getReason() != null
-                        && ex.getReason().contains("Aucune etape configuree pour ce circuit");
-                if (!noConfiguredSteps) {
-                    throw ex;
-                }
-                log.warn("Aucune etape configuree pour le circuit {}: creation de fiche {} sans etapes",
-                        saved.getCircuit() == null ? null : saved.getCircuit().getId(), saved.getId());
-            }
-        }
+        initFicheEtapesFromCircuit(saved.getId());
 
         return toFicheDtoWithSignataires(saved);
     }
@@ -665,19 +522,12 @@ public class BaBusinessServiceImpl implements BaBusinessService {
         List<BaCircuitEtape> configEtapes = circuitEtapeRepository
                 .findByCircuitIdOrderByOrdre(fiche.getCircuit().getId());
         if (configEtapes.isEmpty()) {
-            return Collections.emptyList();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Aucune etape configuree pour ce circuit.");
         }
 
         List<BaFicheHabilitationEtape> existing = ficheHabilitationEtapeRepository.findByFicheId(ficheId);
-        java.util.Set<String> existingEtapes = existing.stream()
-                .map(e -> e.getEtapeDefinition() == null ? null : e.getEtapeDefinition().getId())
-                .collect(Collectors.toSet());
 
         for (BaCircuitEtape config : configEtapes) {
-            BaEtapeDefinition definition = resolveEtapeDefinitionFromCircuitEtape(config);
-            if (definition != null && existingEtapes.contains(definition.getId())) {
-                continue;
-            }
             boolean ordreAlreadyExists = existing.stream()
                     .anyMatch(e -> e.getOrdre() != null && e.getOrdre().equals(config.getOrdre()));
             if (ordreAlreadyExists) {
@@ -686,82 +536,16 @@ public class BaBusinessServiceImpl implements BaBusinessService {
             BaFicheHabilitationEtape etape = new BaFicheHabilitationEtape();
             etape.setId(BaUtils.randomUUID());
             etape.setFiche(fiche);
-            etape.setEtapeDefinition(definition);
             etape.setOrdre(config.getOrdre());
             etape.setStatutValidation(EHabilitationStatut.EN_ATTENTE);
-            etape.setValidateur(definition == null
-                    ? resolveSignerForCircuitEtape(config)
-                    : resolveSignerForDefinition(definition));
+            etape.setValidateur(resolveSignerForCircuitEtape(fiche, config));
             ficheHabilitationEtapeRepository.save(etape);
         }
 
         return ficheHabilitationEtapeRepository.findByFicheIdOrderByOrdre(ficheId)
                 .stream()
-                .map(mapper::maps)
+                .map(etape -> toFicheEtapeDto(fiche, etape))
                 .collect(Collectors.toList());
-    }
-
-    @Override
-    public BaFicheHabilitationEtapeDto addEtape(final BaFicheHabilitationEtapeDto dto) {
-        logService.log(new BaLogDto(EAction.C, "Etape habilitation"));
-        if (dto == null || BaUtils.isEmpty(dto.getIdEtapeDefinition()) || BaUtils.isEmpty(dto.getIdFiche())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Etape ou fiche manquante");
-        }
-        BaFicheHabilitationEtape entity = new BaFicheHabilitationEtape();
-        entity.setId(BaUtils.randomUUID());
-        BaFicheHabilitation fiche = ficheHabilitationRepository.findById(dto.getIdFiche())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Fiche introuvable"));
-        entity.setFiche(fiche);
-        if (fiche.getCircuit() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Circuit introuvable");
-        }
-        List<BaCircuitEtape> configs = circuitEtapeRepository
-                .findByCircuitIdOrderByOrdre(fiche.getCircuit().getId());
-        if (configs.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Aucune etape configuree pour ce circuit");
-        }
-        BaCircuitEtape config = configs.stream()
-                .filter(c -> {
-                    BaEtapeDefinition definition = resolveEtapeDefinitionFromCircuitEtape(c);
-                    return definition != null && definition.getId().equals(dto.getIdEtapeDefinition());
-                })
-                .findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Etape non configuree pour ce circuit"));
-        boolean exists = ficheHabilitationEtapeRepository.findByFicheId(dto.getIdFiche())
-                .stream()
-                .anyMatch(e -> e.getEtapeDefinition() != null && e.getEtapeDefinition().getId().equals(dto.getIdEtapeDefinition()));
-        if (exists) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cette etape existe deja pour la fiche");
-        }
-        entity.setOrdre(config.getOrdre());
-        entity.setEtapeDefinition(resolveEtapeDefinitionFromCircuitEtape(config));
-        if (!BaUtils.isEmpty(dto.getIdValidateur())) {
-            entity.setValidateur(userRepository.findById(dto.getIdValidateur())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Signataire introuvable")));
-        }
-        int currentIndex = -1;
-        for (int i = 0; i < configs.size(); i++) {
-            BaEtapeDefinition def = resolveEtapeDefinitionFromCircuitEtape(configs.get(i));
-            if (def != null && def.getId().equals(dto.getIdEtapeDefinition())) {
-                currentIndex = i;
-                break;
-            }
-        }
-        if (currentIndex < 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Etape non configuree pour ce circuit");
-        }
-        java.util.Set<String> existingEtapes = ficheHabilitationEtapeRepository
-                .findByFicheId(dto.getIdFiche())
-                .stream()
-                .map(e -> e.getEtapeDefinition() == null ? null : e.getEtapeDefinition().getId())
-                .collect(Collectors.toSet());
-        for (int i = 0; i < currentIndex; i++) {
-            BaEtapeDefinition required = resolveEtapeDefinitionFromCircuitEtape(configs.get(i));
-            if (required != null && !existingEtapes.contains(required.getId())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Impossible d'ajouter cette etape avant les precedentes");
-            }
-        }
-        return mapper.maps(ficheHabilitationEtapeRepository.save(entity));
     }
 
     @Override
@@ -1191,6 +975,155 @@ public class BaBusinessServiceImpl implements BaBusinessService {
         return mapper.maps(reunionActionRepository.save(entity));
     }
 
+    @Override
+    public List<BaValidationDelegationDto> getValidationDelegations() {
+        return validationDelegationRepository.findByStatutOrderByCreatedDateDesc(EStatut.A).stream()
+                .map(this::toValidationDelegationDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public BaValidationDelegationDto createValidationDelegation(final BaValidationDelegationDto dto) {
+        logService.log(new BaLogDto(EAction.C, "Delegation validation"));
+        BaValidationDelegation entity = new BaValidationDelegation();
+        entity.setId(BaUtils.randomUUID());
+        hydrateValidationDelegation(entity, dto);
+        entity.setActif(dto.getActif() == null || dto.getActif());
+        return toValidationDelegationDto(validationDelegationRepository.save(entity));
+    }
+
+    @Override
+    public BaValidationDelegationDto updateValidationDelegation(final String id, final BaValidationDelegationDto dto) {
+        logService.log(new BaLogDto(EAction.U, "Delegation validation " + id));
+        BaValidationDelegation entity = validationDelegationRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Delegation introuvable"));
+        hydrateValidationDelegation(entity, dto);
+        entity.setActif(dto.getActif() == null || dto.getActif());
+        return toValidationDelegationDto(validationDelegationRepository.save(entity));
+    }
+
+    @Override
+    public void desactiverValidationDelegation(final String id) {
+        logService.log(new BaLogDto(EAction.D, "Delegation validation " + id));
+        BaValidationDelegation entity = validationDelegationRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Delegation introuvable"));
+        entity.setActif(false);
+        entity.setStatut(EStatut.D);
+        validationDelegationRepository.save(entity);
+    }
+
+    @Override
+    public List<BaDgaPoleValidateurDto> getDgaPoleValidateurs() {
+        return dgaPoleValidateurRepository.findByStatutOrderByCreatedDateDesc(EStatut.A).stream()
+                .map(this::toDgaPoleValidateurDto)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public BaDgaPoleValidateurDto createDgaPoleValidateur(final BaDgaPoleValidateurDto dto) {
+        logService.log(new BaLogDto(EAction.C, "DGA pole validateur"));
+        BaDgaPoleValidateur entity = new BaDgaPoleValidateur();
+        entity.setId(BaUtils.randomUUID());
+        hydrateDgaPoleValidateur(entity, dto);
+        entity.setActif(dto.getActif() == null || dto.getActif());
+        return toDgaPoleValidateurDto(dgaPoleValidateurRepository.save(entity));
+    }
+
+    @Override
+    public BaDgaPoleValidateurDto updateDgaPoleValidateur(final String id, final BaDgaPoleValidateurDto dto) {
+        logService.log(new BaLogDto(EAction.U, "DGA pole validateur " + id));
+        BaDgaPoleValidateur entity = dgaPoleValidateurRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Configuration DGA introuvable"));
+        hydrateDgaPoleValidateur(entity, dto);
+        entity.setActif(dto.getActif() == null || dto.getActif());
+        return toDgaPoleValidateurDto(dgaPoleValidateurRepository.save(entity));
+    }
+
+    @Override
+    public void desactiverDgaPoleValidateur(final String id) {
+        logService.log(new BaLogDto(EAction.D, "DGA pole validateur " + id));
+        BaDgaPoleValidateur entity = dgaPoleValidateurRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Configuration DGA introuvable"));
+        entity.setActif(false);
+        entity.setStatut(EStatut.D);
+        dgaPoleValidateurRepository.save(entity);
+    }
+
+    private void hydrateDgaPoleValidateur(final BaDgaPoleValidateur entity, final BaDgaPoleValidateurDto dto) {
+        if (dto == null || dto.getPole() == null || BaUtils.isEmpty(dto.getIdDga()) || dto.getDateDebut() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Pole, DGA et date debut obligatoires");
+        }
+        if (dto.getDateFin() != null && dto.getDateFin().isBefore(dto.getDateDebut())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Periode DGA invalide");
+        }
+        BaUser dga = userRepository.findById(dto.getIdDga())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "DGA introuvable"));
+        if (!hasRole(dga, "BA_DGA") && dga.getFonction() != EFonctionEmploye.DIRECTEUR_GENERAL_ADJOINT) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "L'utilisateur doit etre DGA ou avoir le role BA_DGA");
+        }
+        entity.setPole(dto.getPole());
+        entity.setDga(dga);
+        entity.setDateDebut(dto.getDateDebut());
+        entity.setDateFin(dto.getDateFin());
+    }
+
+    private BaDgaPoleValidateurDto toDgaPoleValidateurDto(final BaDgaPoleValidateur entity) {
+        BaDgaPoleValidateurDto dto = new BaDgaPoleValidateurDto();
+        dto.setId(entity.getId());
+        dto.setPole(entity.getPole());
+        dto.setIdDga(entity.getDga() == null ? null : entity.getDga().getId());
+        dto.setNomDga(fullName(entity.getDga()));
+        dto.setDateDebut(entity.getDateDebut());
+        dto.setDateFin(entity.getDateFin());
+        dto.setActif(entity.getActif());
+        return dto;
+    }
+
+    private void hydrateValidationDelegation(final BaValidationDelegation entity,
+                                             final BaValidationDelegationDto dto) {
+        if (dto == null || BaUtils.isEmpty(dto.getIdDelegue()) || BaUtils.isEmpty(dto.getRoleCode())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Delegue et role obligatoires");
+        }
+        if (dto.getDateDebut() == null || dto.getDateFin() == null || dto.getDateFin().isBefore(dto.getDateDebut())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Periode de delegation invalide");
+        }
+        entity.setDelegant(BaUtils.isEmpty(dto.getIdDelegant()) ? null : userRepository.findById(dto.getIdDelegant())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Delegant introuvable")));
+        entity.setDelegue(userRepository.findById(dto.getIdDelegue())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Delegue introuvable")));
+        entity.setRoleCode(normalizeRoleCode(dto.getRoleCode()));
+        entity.setDepartement(BaUtils.isEmpty(dto.getIdDepartement()) ? null : departementRepository.findById(dto.getIdDepartement())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Departement introuvable")));
+        entity.setService(BaUtils.isEmpty(dto.getIdService()) ? null : serviceRepository.findById(dto.getIdService())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Service introuvable")));
+        entity.setAgence(BaUtils.isEmpty(dto.getIdAgence()) ? null : agenceRepository.findById(dto.getIdAgence())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Agence introuvable")));
+        entity.setDateDebut(dto.getDateDebut());
+        entity.setDateFin(dto.getDateFin());
+        entity.setMotif(dto.getMotif());
+    }
+
+    private BaValidationDelegationDto toValidationDelegationDto(final BaValidationDelegation entity) {
+        BaValidationDelegationDto dto = new BaValidationDelegationDto();
+        dto.setId(entity.getId());
+        dto.setIdDelegant(entity.getDelegant() == null ? null : entity.getDelegant().getId());
+        dto.setNomDelegant(fullName(entity.getDelegant()));
+        dto.setIdDelegue(entity.getDelegue() == null ? null : entity.getDelegue().getId());
+        dto.setNomDelegue(fullName(entity.getDelegue()));
+        dto.setRoleCode(entity.getRoleCode());
+        dto.setIdDepartement(entity.getDepartement() == null ? null : entity.getDepartement().getId());
+        dto.setNomDepartement(entity.getDepartement() == null ? null : entity.getDepartement().getNom());
+        dto.setIdService(entity.getService() == null ? null : entity.getService().getId());
+        dto.setNomService(entity.getService() == null ? null : entity.getService().getNom());
+        dto.setIdAgence(entity.getAgence() == null ? null : entity.getAgence().getId());
+        dto.setNomAgence(entity.getAgence() == null ? null : entity.getAgence().getNom());
+        dto.setDateDebut(entity.getDateDebut());
+        dto.setDateFin(entity.getDateFin());
+        dto.setActif(entity.getActif());
+        dto.setMotif(entity.getMotif());
+        return dto;
+    }
+
     private void hydrateEmployeRelations(final BaUser entity, final BaUserDto dto) {
         entity.setService(BaUtils.isEmpty(dto.getIdService()) ? null : serviceRepository.findById(dto.getIdService())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Service introuvable")));
@@ -1225,10 +1158,56 @@ public class BaBusinessServiceImpl implements BaBusinessService {
         }
         List<BaFicheHabilitationEtapeDto> etapes = ficheHabilitationEtapeRepository.findByFicheIdOrderByOrdre(fiche.getId())
                 .stream()
-                .map(mapper::maps)
+                .map(etape -> toFicheEtapeDto(fiche, etape))
                 .collect(Collectors.toList());
         ficheDto.setEtapes(etapes.isEmpty() ? new ArrayList<>() : etapes);
         return ficheDto;
+    }
+
+    private BaFicheHabilitationEtapeDto toFicheEtapeDto(final BaFicheHabilitation fiche,
+                                                        final BaFicheHabilitationEtape etape) {
+        BaFicheHabilitationEtape effectiveEtape = refreshPendingValidatorIfNeeded(fiche, etape);
+        BaFicheHabilitationEtapeDto dto = mapper.maps(effectiveEtape);
+        BaCircuitEtape config = resolveCircuitEtapeForFicheEtape(fiche, effectiveEtape);
+        if (config != null) {
+            dto.setTypeEtape(config.getType());
+            dto.setIdDepartement(config.getDepartement() == null ? null : config.getDepartement().getId());
+            dto.setNomDepartement(config.getDepartement() == null ? null : config.getDepartement().getNom());
+            dto.setIdService(config.getService() == null ? null : config.getService().getId());
+            dto.setNomService(config.getService() == null ? null : config.getService().getNom());
+            dto.setFonctionRequise(parseFonction(config.getFonctionRequise()));
+            dto.setIdRole(config.getRole() == null ? null : config.getRole().getId());
+            dto.setRoleLibelle(config.getRole() == null ? null : config.getRole().getLibelle());
+        }
+        return dto;
+    }
+
+    private BaFicheHabilitationEtape refreshPendingValidatorIfNeeded(final BaFicheHabilitation fiche,
+                                                                     final BaFicheHabilitationEtape etape) {
+        if (fiche == null || etape == null || etape.getStatutValidation() != EHabilitationStatut.EN_ATTENTE) {
+            return etape;
+        }
+        if (etape.getValidateur() != null && isActiveValidator(etape.getValidateur())) {
+            return etape;
+        }
+        BaCircuitEtape config = resolveCircuitEtapeForFicheEtape(fiche, etape);
+        if (config == null) {
+            return etape;
+        }
+        try {
+            BaUser validateur = resolveSignerForCircuitEtape(fiche, config);
+            if (etape.getValidateur() == null || !validateur.getId().equals(etape.getValidateur().getId())) {
+                etape.setValidateur(validateur);
+                return ficheHabilitationEtapeRepository.save(etape);
+            }
+        } catch (ResponseStatusException ex) {
+            log.warn("Impossible de recalculer le validateur de l'etape {}: {}", etape.getId(), ex.getReason());
+            if (etape.getValidateur() != null && !isActiveValidator(etape.getValidateur())) {
+                etape.setValidateur(null);
+                return ficheHabilitationEtapeRepository.save(etape);
+            }
+        }
+        return etape;
     }
 
     private void ensureComptePlateformeForFiche(final BaFicheHabilitation fiche) {
@@ -1572,14 +1551,12 @@ public class BaBusinessServiceImpl implements BaBusinessService {
         }
         List<BaReinitialisationCompteEtape> etapes = new ArrayList<>();
         for (BaCircuitEtape config : configs) {
-            BaEtapeDefinition definition = resolveEtapeDefinitionFromCircuitEtape(config);
             BaReinitialisationCompteEtape etape = new BaReinitialisationCompteEtape();
             etape.setId(BaUtils.randomUUID());
             etape.setDemande(demande);
-            etape.setEtapeDefinition(definition);
             etape.setOrdre(config.getOrdre());
             etape.setStatutValidation(EHabilitationStatut.EN_ATTENTE);
-            etape.setValidateur(definition == null ? resolveSignerForCircuitEtape(config) : resolveSignerForDefinition(definition));
+            etape.setValidateur(resolveSignerForCircuitEtape(demande.getDemandeur(), config));
             etapes.add(etape);
         }
         reinitialisationCompteEtapeRepository.saveAll(etapes);
@@ -1600,11 +1577,9 @@ public class BaBusinessServiceImpl implements BaBusinessService {
     private boolean isUserAllowedForReinitialisationValidation(final BaUserDto user,
                                                               final BaUser employe,
                                                               final BaReinitialisationCompteEtape etape) {
-        if (etape.getValidateur() != null && etape.getValidateur().getId() != null
-                && etape.getValidateur().getId().equals(employe.getId())) {
-            return true;
-        }
-        return isUserAllowedForEtape(user, employe, etape.getEtapeDefinition());
+        BaCircuitEtape config = resolveCircuitEtapeForReinitialisationEtape(etape);
+        BaUser demandeur = etape.getDemande() == null ? null : etape.getDemande().getDemandeur();
+        return isUserAllowedByCircuitConfig(user, employe, demandeur, config);
     }
 
     private void ensureReinitialisationTraitement(final BaReinitialisationCompte demande) {
@@ -1675,7 +1650,8 @@ public class BaBusinessServiceImpl implements BaBusinessService {
         BaReinitialisationCompteEtapeDto dto = new BaReinitialisationCompteEtapeDto();
         dto.setId(etape.getId());
         dto.setIdDemande(etape.getDemande() == null ? null : etape.getDemande().getId());
-        dto.setNomEtape(etape.getEtapeDefinition() == null ? null : etape.getEtapeDefinition().getLibelle());
+        BaCircuitEtape config = resolveCircuitEtapeForReinitialisationEtape(etape);
+        dto.setNomEtape(buildCircuitEtapeLabel(config));
         dto.setIdValidateur(etape.getValidateur() == null ? null : etape.getValidateur().getId());
         dto.setNomCompletValidateur(etape.getValidateur() == null ? null : etape.getValidateur().getNom() + " " + etape.getValidateur().getPrenom());
         dto.setOrdre(etape.getOrdre());
@@ -1739,18 +1715,6 @@ public class BaBusinessServiceImpl implements BaBusinessService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Utilisateur introuvable"));
     }
 
-    private boolean isUserAllowedForEtape(final BaUserDto user,
-                                          final BaUser employe,
-                                          final BaEtapeDefinition definition) {
-        if (definition == null) {
-            return false;
-        }
-        if (hasRequiredRoleCode(user, definition)) {
-            return true;
-        }
-        return isUserMatchingDefinition(employe, definition);
-    }
-
     private boolean isUserAllowedForValidation(final BaUserDto user,
                                                final BaUser employe,
                                                final BaFicheHabilitation fiche,
@@ -1758,15 +1722,92 @@ public class BaBusinessServiceImpl implements BaBusinessService {
         if (employe == null || ficheEtape == null) {
             return false;
         }
+        if (isUserAllowedByCircuitStep(user, employe, fiche, ficheEtape)) {
+            return true;
+        }
         if (!isEligibleSignerFunction(employe)) {
             return false;
         }
-        if (ficheEtape.getValidateur() != null && ficheEtape.getValidateur().getId() != null) {
-            if (ficheEtape.getValidateur().getId().equals(employe.getId())) {
-                return true;
-            }
+        return false;
+    }
+
+    private boolean isUserAllowedByCircuitStep(final BaUserDto user,
+                                               final BaUser employe,
+                                               final BaFicheHabilitation fiche,
+                                               final BaFicheHabilitationEtape ficheEtape) {
+        if (user == null || employe == null || fiche == null || fiche.getCircuit() == null || ficheEtape == null) {
+            return false;
         }
-        return isUserAllowedForEtape(user, employe, ficheEtape.getEtapeDefinition());
+        BaCircuitEtape config = resolveCircuitEtapeForFicheEtape(fiche, ficheEtape);
+        return isUserAllowedByCircuitConfig(user, employe, fiche.getEmploye(), config);
+    }
+
+    private BaCircuitEtape resolveCircuitEtapeForFicheEtape(final BaFicheHabilitation fiche,
+                                                            final BaFicheHabilitationEtape ficheEtape) {
+        if (fiche == null || fiche.getCircuit() == null || ficheEtape == null || ficheEtape.getOrdre() == null) {
+            return null;
+        }
+        return circuitEtapeRepository.findByCircuitIdOrderByOrdre(fiche.getCircuit().getId()).stream()
+                .filter(config -> config.getOrdre() != null && config.getOrdre().equals(ficheEtape.getOrdre()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private BaCircuitEtape resolveCircuitEtapeForReinitialisationEtape(final BaReinitialisationCompteEtape etape) {
+        if (etape == null || etape.getDemande() == null || etape.getDemande().getCircuit() == null || etape.getOrdre() == null) {
+            return null;
+        }
+        return circuitEtapeRepository.findByCircuitIdOrderByOrdre(etape.getDemande().getCircuit().getId()).stream()
+                .filter(config -> config.getOrdre() != null && config.getOrdre().equals(etape.getOrdre()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private String buildCircuitEtapeLabel(final BaCircuitEtape config) {
+        if (config == null) {
+            return null;
+        }
+        if (config.getRole() != null && !BaUtils.isEmpty(config.getRole().getLibelle())) {
+            return config.getRole().getLibelle();
+        }
+        EFonctionEmploye fonction = getRequiredSignerFunction(config);
+        if (fonction != null) {
+            return fonction.name();
+        }
+        if (config.getService() != null) {
+            return config.getService().getNom();
+        }
+        if (config.getDepartement() != null) {
+            return config.getDepartement().getNom();
+        }
+        return "Etape " + config.getOrdre();
+    }
+
+    private boolean isUserAllowedByCircuitConfig(final BaUserDto user,
+                                                final BaUser employe,
+                                                final BaUser agentConcerne,
+                                                final BaCircuitEtape config) {
+        if (config == null || !isActiveValidator(employe)) {
+            return false;
+        }
+        Set<String> allowedRoleCodes = resolveAllowedValidatorRoleCodes(config);
+        return !allowedRoleCodes.isEmpty()
+                && (hasAnyRole(user, allowedRoleCodes)
+                || hasAnyRole(employe, allowedRoleCodes)
+                || hasActiveValidationDelegation(employe, allowedRoleCodes, config))
+                && (!requiresStructureScope(config) || isRoleValidatorInCircuitScope(employe, agentConcerne, config));
+    }
+
+    private EFonctionEmploye parseFonction(final String value) {
+        if (BaUtils.isEmpty(value)) {
+            return null;
+        }
+        try {
+            return EFonctionEmploye.valueOf(value.trim());
+        } catch (IllegalArgumentException ex) {
+            log.warn("Fonction requise inconnue dans le circuit: {}", value);
+            return null;
+        }
     }
 
     private boolean isEligibleSignerFunction(final BaUser user) {
@@ -1777,100 +1818,35 @@ public class BaBusinessServiceImpl implements BaBusinessService {
                 || user.getFonction() == EFonctionEmploye.DIRECTEUR_GENERAL);
     }
 
-    private BaUser resolveAndValidateProvidedSigner(final String userId, final BaEtapeDefinition definition) {
-        BaUser signataire = userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Signataire introuvable"));
-        if (!isEligibleSignerFunction(signataire)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Le signataire doit etre CHEF_SERVICE, DIRECTEUR, DGA ou DG.");
-        }
-        if (!isUserMatchingDefinition(signataire, definition)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Le signataire ne correspond pas a l'etape de validation.");
-        }
-        return signataire;
-    }
-
-    private BaUser resolveSignerForDefinition(final BaEtapeDefinition definition) {
-        if (definition == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Impossible de determiner le signataire: definition d'etape incomplete.");
-        }
-        EFonctionEmploye requiredFunction = getRequiredSignerFunction(definition);
-        if (requiredFunction == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Impossible de determiner la fonction signataire pour l'etape.");
-        }
-
-        BaUser signataire = findSignerCandidates(definition, requiredFunction).stream()
-                .filter(this::isEligibleSignerFunction)
-                .filter(candidate -> isUserMatchingDefinition(candidate, definition))
-                .findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Aucun signataire trouve pour l'etape " + (definition.getLibelle() == null ? "" : definition.getLibelle())));
-        return signataire;
-    }
-
-    private BaUser resolveSignerForCircuitEtape(final BaCircuitEtape etape) {
+    private BaUser resolveSignerForCircuitEtape(final BaFicheHabilitation fiche, final BaCircuitEtape etape) {
         if (etape == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Impossible de determiner le signataire: etape de circuit incomplete.");
         }
-        BaEtapeDefinition definition = new BaEtapeDefinition();
-        definition.setType(etape.getType() == null ? EHabilitationEtapeType.DEPARTEMENT : etape.getType());
-        definition.setDepartement(etape.getDepartement());
-        definition.setService(etape.getService());
-        definition.setFonctionRequise(getRequiredSignerFunction(definition));
-        return resolveSignerForDefinition(definition);
+        Set<String> allowedRoleCodes = resolveAllowedValidatorRoleCodes(etape);
+        if (allowedRoleCodes.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Impossible de determiner le signataire: role validateur manquant pour l'etape.");
+        }
+        BaUser agentConcerne = fiche == null ? null : fiche.getEmploye();
+        return findRoleSigner(agentConcerne, etape, allowedRoleCodes);
     }
 
-    private boolean isUserMatchingDefinition(final BaUser user, final BaEtapeDefinition definition) {
-        if (user == null || definition == null) {
-            return false;
+    private BaUser resolveSignerForCircuitEtape(final BaUser agentConcerne, final BaCircuitEtape etape) {
+        if (etape == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Impossible de determiner le signataire: etape de circuit incomplete.");
         }
-        EFonctionEmploye requiredFunction = getRequiredSignerFunction(definition);
-        if (requiredFunction == null || user.getFonction() != requiredFunction) {
-            return false;
+        Set<String> allowedRoleCodes = resolveAllowedValidatorRoleCodes(etape);
+        if (allowedRoleCodes.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Impossible de determiner le signataire: role validateur manquant pour l'etape.");
         }
-        if (isGeneralManagementFunction(requiredFunction)) {
-            return true;
-        }
-        if (definition.getType() == EHabilitationEtapeType.DEPARTEMENT) {
-            return user.getDepartement() != null
-                    && definition.getDepartement() != null
-                    && user.getDepartement().getId().equals(definition.getDepartement().getId());
-        }
-        if (definition.getType() == EHabilitationEtapeType.SERVICE) {
-            return user.getService() != null
-                    && definition.getService() != null
-                    && user.getService().getId().equals(definition.getService().getId());
-        }
-        return false;
+        return findRoleSigner(agentConcerne, etape, allowedRoleCodes);
     }
 
-    private boolean hasRequiredRoleCode(final BaUserDto user, final BaEtapeDefinition definition) {
-        return user != null
-                && user.getRoles() != null
-                && definition != null
-                && !BaUtils.isEmpty(definition.getRoleCode())
-                && user.getRoles().stream()
-                .anyMatch(r -> definition.getRoleCode().equalsIgnoreCase(r.getCode()));
-    }
-
-    private EFonctionEmploye getRequiredSignerFunction(final BaEtapeDefinition definition) {
-        if (definition == null) {
-            return null;
-        }
-        if (isGeneralManagementFunction(definition.getFonctionRequise())) {
-            return definition.getFonctionRequise();
-        }
-        if (definition.getType() == EHabilitationEtapeType.SERVICE) {
-            return EFonctionEmploye.CHEF_SERVICE;
-        }
-        if (definition.getType() == EHabilitationEtapeType.DEPARTEMENT) {
-            return EFonctionEmploye.DIRECTEUR;
-        }
-        return null;
+    private BaUser resolveSignerForCircuitEtape(final BaCircuitEtape etape) {
+        return resolveSignerForCircuitEtape((BaUser) null, etape);
     }
 
     private boolean isEligibleSignerFunction(final EFonctionEmploye fonction) {
@@ -1885,21 +1861,403 @@ public class BaBusinessServiceImpl implements BaBusinessService {
                 || fonction == EFonctionEmploye.DIRECTEUR_GENERAL;
     }
 
-    private List<BaUser> findSignerCandidates(final BaEtapeDefinition definition,
+    private EFonctionEmploye getRequiredSignerFunction(final BaCircuitEtape etape) {
+        if (etape == null) {
+            return null;
+        }
+        EFonctionEmploye configured = parseFonction(etape.getFonctionRequise());
+        if (configured != null) {
+            return configured;
+        }
+        if (etape.getType() == EHabilitationEtapeType.SERVICE) {
+            return EFonctionEmploye.CHEF_SERVICE;
+        }
+        if (etape.getType() == EHabilitationEtapeType.DEPARTEMENT) {
+            return EFonctionEmploye.DIRECTEUR;
+        }
+        return null;
+    }
+
+    private boolean isUserMatchingCircuitEtape(final BaUser user,
+                                               final BaUser agentConcerne,
+                                               final BaCircuitEtape etape,
+                                               final EFonctionEmploye requiredFunction) {
+        if (user == null || etape == null || requiredFunction == null || user.getFonction() != requiredFunction) {
+            return false;
+        }
+        if (isGeneralManagementFunction(requiredFunction)) {
+            return isUserInValidationScope(user, agentConcerne, etape);
+        }
+        if (etape.getType() == EHabilitationEtapeType.SERVICE) {
+            return user.getService() != null
+                    && etape.getService() != null
+                    && user.getService().getId().equals(etape.getService().getId());
+        }
+        return user.getDepartement() != null
+                && etape.getDepartement() != null
+                && user.getDepartement().getId().equals(etape.getDepartement().getId());
+    }
+
+    private boolean isActiveValidator(final BaUser user) {
+        return user != null
+                && user.getStatut() == EStatut.A
+                && Boolean.TRUE.equals(user.getActivated())
+                && !Boolean.TRUE.equals(user.getLocked());
+    }
+
+    private boolean isUserInValidationScope(final BaUser validateur,
+                                            final BaUser agentConcerne,
+                                            final BaCircuitEtape config) {
+        if (validateur == null) {
+            return false;
+        }
+        EFonctionEmploye requiredFunction = getRequiredSignerFunction(config);
+        if (requiredFunction == EFonctionEmploye.DIRECTEUR_GENERAL) {
+            if (validateur.getFonction() == EFonctionEmploye.DIRECTEUR_GENERAL || hasRole(validateur, "BA_DG")) {
+                return true;
+            }
+            return (validateur.getFonction() == EFonctionEmploye.DIRECTEUR_GENERAL_ADJOINT || hasRole(validateur, "BA_DGA"))
+                    && !hasActiveDgValidator();
+        }
+        if (validateur.getFonction() == EFonctionEmploye.DIRECTEUR_GENERAL) {
+            return true;
+        }
+        if (agentConcerne != null) {
+            BaUser dgaDepartement = resolveEffectiveDgaValidateur(agentConcerne.getDepartement());
+            if (dgaDepartement != null) {
+                return isActiveValidator(dgaDepartement) && dgaDepartement.getId().equals(validateur.getId());
+            }
+            if (sameDepartement(validateur, agentConcerne)
+                    || sameService(validateur, agentConcerne)
+                    || sameAgence(validateur, agentConcerne)) {
+                return true;
+            }
+            if (hasAnyStructure(agentConcerne)) {
+                return false;
+            }
+        }
+        if (config != null) {
+            if (config.getType() == EHabilitationEtapeType.SERVICE && config.getService() != null) {
+                return validateur.getService() != null
+                        && validateur.getService().getId().equals(config.getService().getId());
+            }
+            if (config.getType() == EHabilitationEtapeType.DEPARTEMENT && config.getDepartement() != null) {
+                return validateur.getDepartement() != null
+                        && validateur.getDepartement().getId().equals(config.getDepartement().getId());
+            }
+        }
+        return !hasAnyStructure(validateur);
+    }
+
+    private boolean sameDepartement(final BaUser left, final BaUser right) {
+        return left.getDepartement() != null
+                && right.getDepartement() != null
+                && left.getDepartement().getId().equals(right.getDepartement().getId());
+    }
+
+    private boolean sameService(final BaUser left, final BaUser right) {
+        return left.getService() != null
+                && right.getService() != null
+                && left.getService().getId().equals(right.getService().getId());
+    }
+
+    private boolean sameAgence(final BaUser left, final BaUser right) {
+        return left.getAgence() != null
+                && right.getAgence() != null
+                && left.getAgence().getId().equals(right.getAgence().getId());
+    }
+
+    private boolean hasAnyStructure(final BaUser user) {
+        return user != null
+                && (user.getDepartement() != null || user.getService() != null || user.getAgence() != null);
+    }
+
+    private BaUser resolveDgaValidateur(final String idDgaValidateur) {
+        if (BaUtils.isEmpty(idDgaValidateur)) {
+            return null;
+        }
+        BaUser dga = userRepository.findById(idDgaValidateur)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "DGA validateur introuvable"));
+        if (dga.getFonction() != EFonctionEmploye.DIRECTEUR_GENERAL_ADJOINT) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Le validateur du departement doit avoir la fonction DIRECTEUR_GENERAL_ADJOINT.");
+        }
+        if (!isActiveValidator(dga)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Le DGA validateur selectionne doit etre actif, active et non verrouille.");
+        }
+        return dga;
+    }
+
+    private BaDepartement resolveParentDepartement(final String parentDepartementId,
+                                                   final String currentDepartementId) {
+        if (BaUtils.isEmpty(parentDepartementId)) {
+            return null;
+        }
+        if (parentDepartementId.equals(currentDepartementId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Un departement ne peut pas etre son propre parent.");
+        }
+        return departementRepository.findById(parentDepartementId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Departement parent introuvable"));
+    }
+
+    private BaUser resolveEffectiveDgaValidateur(final BaDepartement departement) {
+        if (departement == null) {
+            return null;
+        }
+        BaDepartement cursor = departement;
+        Set<String> visited = new HashSet<>();
+        EDgaPole inheritedPole = null;
+        while (cursor != null && cursor.getId() != null && visited.add(cursor.getId())) {
+            if (inheritedPole == null && cursor.getDgaPole() != null) {
+                inheritedPole = cursor.getDgaPole();
+            }
+            cursor = cursor.getParentDepartement();
+        }
+        if (inheritedPole == null) {
+            inheritedPole = EDgaPole.DEVELOPPEMENT;
+        }
+        BaUser poleDga = resolveConfiguredDgaForPole(inheritedPole);
+        if (poleDga != null) {
+            return poleDga;
+        }
+        return dgaPoleValidateurRepository.findByStatutAndActifTrueOrderByCreatedDateDesc(EStatut.A).stream()
+                .filter(this::isCurrentDgaPoleValidateur)
+                .map(BaDgaPoleValidateur::getDga)
+                .filter(this::isActiveValidator)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private BaUser resolveConfiguredDgaForPole(final EDgaPole pole) {
+        return dgaPoleValidateurRepository.findByPoleAndStatutAndActifTrueOrderByCreatedDateDesc(pole, EStatut.A).stream()
+                .filter(this::isCurrentDgaPoleValidateur)
+                .map(BaDgaPoleValidateur::getDga)
+                .filter(this::isActiveValidator)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private boolean isCurrentDgaPoleValidateur(final BaDgaPoleValidateur config) {
+        if (config == null || !Boolean.TRUE.equals(config.getActif())) {
+            return false;
+        }
+        LocalDate today = LocalDate.now();
+        return (config.getDateDebut() == null || !config.getDateDebut().isAfter(today))
+                && (config.getDateFin() == null || !config.getDateFin().isBefore(today));
+    }
+
+    private BaDepartementDto toDepartementDto(final BaDepartement departement) {
+        BaDepartementDto dto = mapper.maps(departement);
+        BaUser dgaEffectif = resolveEffectiveDgaValidateur(departement);
+        if (dgaEffectif != null) {
+            dto.setIdDgaEffectif(dgaEffectif.getId());
+            dto.setNomDgaEffectif(fullName(dgaEffectif));
+        }
+        return dto;
+    }
+
+    private List<BaUser> findSignerCandidates(final BaCircuitEtape etape,
                                               final EFonctionEmploye requiredFunction) {
         if (isGeneralManagementFunction(requiredFunction)) {
             return userRepository.findByFonctionAndStatut(requiredFunction, EStatut.A);
         }
-        if (definition.getType() == EHabilitationEtapeType.SERVICE && definition.getService() != null) {
+        if (etape.getType() == EHabilitationEtapeType.SERVICE && etape.getService() != null) {
             return userRepository.findByFonctionAndServiceIdAndStatut(
-                    requiredFunction, definition.getService().getId(), EStatut.A);
+                    requiredFunction, etape.getService().getId(), EStatut.A);
         }
-        if (definition.getType() == EHabilitationEtapeType.DEPARTEMENT && definition.getDepartement() != null) {
+        if (etape.getType() == EHabilitationEtapeType.DEPARTEMENT && etape.getDepartement() != null) {
             return userRepository.findByFonctionAndDepartementIdAndStatut(
-                    requiredFunction, definition.getDepartement().getId(), EStatut.A);
+                    requiredFunction, etape.getDepartement().getId(), EStatut.A);
         }
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                 "Impossible de determiner le signataire: structure de l'etape incomplete.");
+    }
+
+    private BaUser findRoleSigner(final BaUser agentConcerne,
+                                  final BaCircuitEtape etape,
+                                  final Set<String> allowedRoleCodes) {
+        return userRepository.findByStatut(EStatut.A).stream()
+                .filter(this::isActiveValidator)
+                .filter(user -> hasAnyRole(user, allowedRoleCodes)
+                        || hasActiveValidationDelegation(user, allowedRoleCodes, etape))
+                .filter(user -> !requiresStructureScope(etape) || isRoleValidatorInCircuitScope(user, agentConcerne, etape))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Aucun signataire trouve avec le role de l'etape " + etape.getOrdre()));
+    }
+
+    private boolean isRoleValidatorInCircuitScope(final BaUser validateur,
+                                                  final BaUser agentConcerne,
+                                                  final BaCircuitEtape etape) {
+        if (validateur == null || etape == null) {
+            return false;
+        }
+        EFonctionEmploye requiredFunction = getRequiredSignerFunction(etape);
+        if (isGeneralManagementFunction(requiredFunction)) {
+            return isUserInValidationScope(validateur, agentConcerne, etape);
+        }
+        if (etape.getType() == EHabilitationEtapeType.SERVICE) {
+            return validateur.getService() != null
+                    && etape.getService() != null
+                    && validateur.getService().getId().equals(etape.getService().getId());
+        }
+        return validateur.getDepartement() != null
+                && etape.getDepartement() != null
+                && validateur.getDepartement().getId().equals(etape.getDepartement().getId());
+    }
+
+    private boolean hasActiveValidationDelegation(final BaUser user,
+                                                  final Set<String> allowedRoleCodes,
+                                                  final BaCircuitEtape etape) {
+        if (user == null || allowedRoleCodes == null || allowedRoleCodes.isEmpty()) {
+            return false;
+        }
+        LocalDate today = LocalDate.now();
+        return validationDelegationRepository
+                .findByDelegueIdAndStatutAndActifTrueAndDateDebutLessThanEqualAndDateFinGreaterThanEqual(
+                        user.getId(), EStatut.A, today, today)
+                .stream()
+                .filter(delegation -> delegationRoleMatches(delegation, allowedRoleCodes))
+                .anyMatch(delegation -> delegationScopeMatches(delegation, user, etape));
+    }
+
+    private boolean delegationRoleMatches(final BaValidationDelegation delegation,
+                                          final Set<String> allowedRoleCodes) {
+        Set<String> delegationRoles = new HashSet<>();
+        addRoleAliases(delegationRoles, delegation == null ? null : delegation.getRoleCode());
+        return delegationRoles.stream().anyMatch(allowedRoleCodes::contains);
+    }
+
+    private boolean delegationScopeMatches(final BaValidationDelegation delegation,
+                                           final BaUser user,
+                                           final BaCircuitEtape etape) {
+        if (delegation == null || etape == null) {
+            return false;
+        }
+        if (delegation.getDepartement() != null) {
+            return etape.getDepartement() != null
+                    && delegation.getDepartement().getId().equals(etape.getDepartement().getId());
+        }
+        if (delegation.getService() != null) {
+            return etape.getService() != null
+                    && delegation.getService().getId().equals(etape.getService().getId());
+        }
+        if (delegation.getAgence() != null) {
+            return user.getAgence() != null
+                    && delegation.getAgence().getId().equals(user.getAgence().getId());
+        }
+        return isRoleValidatorInCircuitScope(user, null, etape);
+    }
+
+    private boolean requiresStructureScope(final BaCircuitEtape etape) {
+        if (etape == null) {
+            return false;
+        }
+        Set<String> configuredRoleCodes = new HashSet<>();
+        addRoleAliases(configuredRoleCodes, etape.getRole() == null ? null : etape.getRole().getCode());
+        addRoleAliases(configuredRoleCodes, etape.getRole() == null ? null : etape.getRole().getLibelle());
+        if (!configuredRoleCodes.isEmpty()) {
+            return configuredRoleCodes.stream().anyMatch(this::isBusinessValidatorRole);
+        }
+        String businessRole = roleCodeForFunction(getRequiredSignerFunction(etape));
+        return isBusinessValidatorRole(normalizeRoleCode(businessRole));
+    }
+
+    private boolean isBusinessValidatorRole(final String roleCode) {
+        String normalized = normalizeRoleCode(roleCode);
+        return "BA_DIRECTEUR".equals(normalized)
+                || "DIRECTEUR".equals(normalized)
+                || "BA_CHEF_SERVICE".equals(normalized)
+                || "CHEF_SERVICE".equals(normalized)
+                || "BA_DGA".equals(normalized)
+                || "DGA".equals(normalized)
+                || "BA_DG".equals(normalized)
+                || "DG".equals(normalized);
+    }
+
+    private Set<String> resolveAllowedValidatorRoleCodes(final BaCircuitEtape etape) {
+        Set<String> roles = new HashSet<>();
+        if (etape == null) {
+            return roles;
+        }
+        addRoleAliases(roles, etape.getRole() == null ? null : etape.getRole().getCode());
+        addRoleAliases(roles, etape.getRole() == null ? null : etape.getRole().getLibelle());
+        EFonctionEmploye requiredFunction = getRequiredSignerFunction(etape);
+        addRoleAliases(roles, roleCodeForFunction(requiredFunction));
+        if (requiredFunction == EFonctionEmploye.DIRECTEUR_GENERAL) {
+            addRoleAliases(roles, "BA_DGA");
+        }
+        return roles;
+    }
+
+    private boolean hasActiveDgValidator() {
+        return userRepository.findByStatut(EStatut.A).stream()
+                .filter(this::isActiveValidator)
+                .anyMatch(user -> user.getFonction() == EFonctionEmploye.DIRECTEUR_GENERAL || hasRole(user, "BA_DG"));
+    }
+
+    private String roleCodeForFunction(final EFonctionEmploye fonction) {
+        if (fonction == null) {
+            return null;
+        }
+        return switch (fonction) {
+            case DIRECTEUR -> "BA_DIRECTEUR";
+            case CHEF_SERVICE -> "BA_CHEF_SERVICE";
+            case DIRECTEUR_GENERAL_ADJOINT -> "BA_DGA";
+            case DIRECTEUR_GENERAL -> "BA_DG";
+            default -> null;
+        };
+    }
+
+    private void addRoleAliases(final Set<String> roles, final String roleCode) {
+        String normalized = normalizeRoleCode(roleCode);
+        if (normalized == null) {
+            return;
+        }
+        roles.add(normalized);
+        if (normalized.startsWith(BaConstants.ROLE_PREFIX)) {
+            roles.add(normalized.substring(BaConstants.ROLE_PREFIX.length()));
+        } else {
+            roles.add(BaConstants.ROLE_PREFIX + normalized);
+        }
+    }
+
+    private boolean hasAnyRole(final BaUser user, final Set<String> allowedRoleCodes) {
+        if (user == null || user.getRoles() == null || user.getRoles().isEmpty() || allowedRoleCodes == null || allowedRoleCodes.isEmpty()) {
+            return false;
+        }
+        return user.getRoles().stream().anyMatch(role ->
+                allowedRoleCodes.contains(normalizeRoleCode(role.getCode()))
+                        || allowedRoleCodes.contains(normalizeRoleCode(role.getLibelle())));
+    }
+
+    private boolean hasAnyRole(final BaUserDto user, final Set<String> allowedRoleCodes) {
+        if (user == null || user.getRoles() == null || user.getRoles().isEmpty() || allowedRoleCodes == null || allowedRoleCodes.isEmpty()) {
+            return false;
+        }
+        return user.getRoles().stream().anyMatch(role ->
+                allowedRoleCodes.contains(normalizeRoleCode(role.getCode()))
+                        || allowedRoleCodes.contains(normalizeRoleCode(role.getLibelle())));
+    }
+
+    private String normalizeRoleCode(final String roleCode) {
+        if (BaUtils.isEmpty(roleCode)) {
+            return null;
+        }
+        return roleCode.trim().toUpperCase();
+    }
+
+    private boolean hasRole(final BaUser user, final BaRole requiredRole) {
+        if (user == null || requiredRole == null || user.getRoles() == null || user.getRoles().isEmpty()) {
+            return false;
+        }
+        return user.getRoles().stream().anyMatch(r ->
+                (r.getId() != null && r.getId().equals(requiredRole.getId()))
+                        || (r.getCode() != null && requiredRole.getCode() != null
+                        && r.getCode().equalsIgnoreCase(requiredRole.getCode())));
     }
 
     private boolean hasRole(final BaUserDto user, final BaRole requiredRole) {
@@ -1910,19 +2268,5 @@ public class BaBusinessServiceImpl implements BaBusinessService {
                 (r.getId() != null && r.getId().equals(requiredRole.getId()))
                         || (r.getCode() != null && requiredRole.getCode() != null
                         && r.getCode().equalsIgnoreCase(requiredRole.getCode())));
-    }
-    private BaEtapeDefinition resolveEtapeDefinitionFromCircuitEtape(final BaCircuitEtape etape) {
-        if (etape == null) {
-            return null;
-        }
-        List<BaEtapeDefinition> defs;
-        if (etape.getType() == EHabilitationEtapeType.SERVICE && etape.getService() != null) {
-            defs = etapeDefinitionRepository.findByServiceId(etape.getService().getId());
-        } else if (etape.getDepartement() != null) {
-            defs = etapeDefinitionRepository.findByDepartementId(etape.getDepartement().getId());
-        } else {
-            return null;
-        }
-        return defs.isEmpty() ? null : defs.get(0);
     }
 }

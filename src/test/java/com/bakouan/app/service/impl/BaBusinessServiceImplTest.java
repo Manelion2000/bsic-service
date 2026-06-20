@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,6 +25,9 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class BaBusinessServiceImplTest {
+    private static final String DEFAULT_VALIDATOR_ROLE_ID = "R-VALIDATEUR";
+    private static final String DEFAULT_VALIDATOR_ROLE_CODE = "HABILITATION_VALIDER";
+
 
     @Mock
     private BaLogService logService;
@@ -40,8 +44,6 @@ class BaBusinessServiceImplTest {
     //@Mock
             // private BaPlateformeEtapeConfigRepository plateformeEtapeConfigRepository;
     @Mock
-    private BaEtapeDefinitionRepository etapeDefinitionRepository;
-    @Mock
     private BaCircuitRepository circuitRepository;
     @Mock
     private BaCircuitEtapeRepository circuitEtapeRepository;
@@ -49,6 +51,10 @@ class BaBusinessServiceImplTest {
     private BaFicheHabilitationRepository ficheHabilitationRepository;
     @Mock
     private BaFicheHabilitationEtapeRepository ficheHabilitationEtapeRepository;
+    @Mock
+    private BaValidationDelegationRepository validationDelegationRepository;
+    @Mock
+    private BaDgaPoleValidateurRepository dgaPoleValidateurRepository;
     @Mock
     private BaReunionRepository reunionRepository;
     @Mock
@@ -154,61 +160,6 @@ class BaBusinessServiceImplTest {
     }
 
     @Test
-    void updateCircuit_updatesFieldsAndPlateforme() {
-        BaCircuit entity = new BaCircuit();
-        entity.setId("C1");
-        entity.setCode("COD1");
-        entity.setLibelle("Old");
-        when(circuitRepository.findById("C1")).thenReturn(Optional.of(entity));
-        when(circuitRepository.existsByCode("COD2")).thenReturn(false);
-        BaPlateforme plateforme = new BaPlateforme();
-        plateforme.setId("P1");
-        plateforme.setNom("Plateforme 1");
-        when(plateformeRepository.findById("P1")).thenReturn(Optional.of(plateforme));
-        when(circuitRepository.save(any(BaCircuit.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        BaCircuitDto dto = new BaCircuitDto();
-        dto.setCode("COD2");
-        dto.setLibelle("Circuit 2");
-        dto.setDescription("Desc");
-        dto.setIdPlateforme("P1");
-
-        BaCircuitDto result = service.updateCircuit("C1", dto);
-
-        assertEquals("COD2", result.getCode());
-        assertEquals("Circuit 2", result.getLibelle());
-        assertEquals("Desc", result.getDescription());
-        assertEquals("P1", result.getIdPlateforme());
-    }
-
-    @Test
-    void updateEtapeDefinition_updatesFieldsAndRelations() {
-        BaEtapeDefinition entity = new BaEtapeDefinition();
-        entity.setId("E1");
-        when(etapeDefinitionRepository.findById("E1")).thenReturn(Optional.of(entity));
-        BaDepartement departement = new BaDepartement();
-        departement.setId("D1");
-        departement.setNom("IT");
-        when(departementRepository.findById("D1")).thenReturn(Optional.of(departement));
-        when(etapeDefinitionRepository.save(any(BaEtapeDefinition.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        BaEtapeDefinitionDto dto = new BaEtapeDefinitionDto();
-        dto.setType(EHabilitationEtapeType.DEPARTEMENT);
-        dto.setIdDepartement("D1");
-        dto.setFonctionRequise(EFonctionEmploye.AGENT);
-        dto.setRoleCode("ROLE_IT");
-        dto.setLibelle("Validation IT");
-
-        BaEtapeDefinitionDto result = service.updateEtapeDefinition("E1", dto);
-
-        assertEquals(EHabilitationEtapeType.DEPARTEMENT, result.getType());
-        assertEquals("D1", result.getIdDepartement());
-        assertEquals(EFonctionEmploye.AGENT, result.getFonctionRequise());
-        assertEquals("ROLE_IT", result.getRoleCode());
-        assertEquals("Validation IT", result.getLibelle());
-    }
-
-    @Test
     void updateReunion_updatesFields() {
         BaReunion entity = new BaReunion();
         entity.setId("R1");
@@ -294,12 +245,15 @@ class BaBusinessServiceImplTest {
         when(userRepository.findById(directeur.getId())).thenReturn(Optional.of(directeur));
 
         BaFicheHabilitation fiche = buildFiche("F1");
-        BaFicheHabilitationEtape etapeRh = buildEtape("E-RH", fiche, 1, EHabilitationStatut.VALIDE,
-                buildDefinition("DEF-RH", EHabilitationEtapeType.DEPARTEMENT, EFonctionEmploye.DIRECTEUR, "D-RH", null));
-        BaFicheHabilitationEtape etapeDit = buildEtape("E-DIT", fiche, 2, EHabilitationStatut.EN_ATTENTE,
-                buildDefinition("DEF-DIT", EHabilitationEtapeType.DEPARTEMENT, EFonctionEmploye.DIRECTEUR, "D-IT", null));
+        fiche.setCircuit(buildCircuit("C1"));
+        BaFicheHabilitationEtape etapeRh = buildEtape("E-RH", fiche, 1, EHabilitationStatut.VALIDE);
+        BaFicheHabilitationEtape etapeDit = buildEtape("E-DIT", fiche, 2, EHabilitationStatut.EN_ATTENTE);
         when(ficheHabilitationRepository.findByStatut(com.bakouan.app.enums.EStatut.A)).thenReturn(List.of(fiche));
         when(ficheHabilitationEtapeRepository.findByFicheIdOrderByOrdre("F1")).thenReturn(List.of(etapeRh, etapeDit));
+        BaCircuitEtape circuitRh = buildCircuitEtape(fiche.getCircuit(), 1, "D-RH");
+        circuitRh.setRole(buildRole("R-RH", "HABILITATION_VALIDER_RH"));
+        BaCircuitEtape circuitDit = buildCircuitEtape(fiche.getCircuit(), 2, "D-IT");
+        when(circuitEtapeRepository.findByCircuitIdOrderByOrdre("C1")).thenReturn(List.of(circuitRh, circuitDit));
 
         org.springframework.data.domain.Page<BaFicheHabilitationDto> result =
                 service.getMyFicheValidations(null, org.springframework.data.domain.PageRequest.of(0, 10));
@@ -317,17 +271,151 @@ class BaBusinessServiceImplTest {
         when(userRepository.findById(directeur.getId())).thenReturn(Optional.of(directeur));
 
         BaFicheHabilitation fiche = buildFiche("F1");
-        BaFicheHabilitationEtape etapeRh = buildEtape("E-RH", fiche, 1, EHabilitationStatut.EN_ATTENTE,
-                buildDefinition("DEF-RH", EHabilitationEtapeType.DEPARTEMENT, EFonctionEmploye.DIRECTEUR, "D-RH", null));
-        BaFicheHabilitationEtape etapeDit = buildEtape("E-DIT", fiche, 2, EHabilitationStatut.EN_ATTENTE,
-                buildDefinition("DEF-DIT", EHabilitationEtapeType.DEPARTEMENT, EFonctionEmploye.DIRECTEUR, "D-IT", null));
+        fiche.setCircuit(buildCircuit("C1"));
+        BaFicheHabilitationEtape etapeRh = buildEtape("E-RH", fiche, 1, EHabilitationStatut.EN_ATTENTE);
+        BaFicheHabilitationEtape etapeDit = buildEtape("E-DIT", fiche, 2, EHabilitationStatut.EN_ATTENTE);
         when(ficheHabilitationRepository.findByStatut(com.bakouan.app.enums.EStatut.A)).thenReturn(List.of(fiche));
         when(ficheHabilitationEtapeRepository.findByFicheIdOrderByOrdre("F1")).thenReturn(List.of(etapeRh, etapeDit));
+        BaCircuitEtape circuitRh = buildCircuitEtape(fiche.getCircuit(), 1, "D-RH");
+        circuitRh.setRole(buildRole("R-RH", "HABILITATION_VALIDER_RH"));
+        BaCircuitEtape circuitDit = buildCircuitEtape(fiche.getCircuit(), 2, "D-IT");
+        when(circuitEtapeRepository.findByCircuitIdOrderByOrdre("C1")).thenReturn(List.of(circuitRh, circuitDit));
 
         org.springframework.data.domain.Page<BaFicheHabilitationDto> result =
                 service.getMyFicheValidations(null, org.springframework.data.domain.PageRequest.of(0, 10));
 
         assertEquals(0, result.getTotalElements());
+    }
+
+    @Test
+    void getMyFicheValidations_roleHasPriorityOverFunction() {
+        BaRole role = buildRole("R-VALIDATEUR", "HABILITATION_VALIDER_DIT");
+        BaUser agentAvecRole = buildUser("U-ROLE", EFonctionEmploye.AGENT, null, null);
+        agentAvecRole.getRoles().add(role);
+        BaRoleDto roleDto = new BaRoleDto();
+        roleDto.setId(role.getId());
+        roleDto.setCode(role.getCode());
+        BaUserDto current = new BaUserDto();
+        current.setId(agentAvecRole.getId());
+        current.getRoles().add(roleDto);
+        when(userService.getUserInfoWithMoreDetails()).thenReturn(current);
+        when(userRepository.findById(agentAvecRole.getId())).thenReturn(Optional.of(agentAvecRole));
+
+        BaFicheHabilitation fiche = buildFiche("F1");
+        fiche.setCircuit(buildCircuit("C1"));
+        BaFicheHabilitationEtape etapeDit = buildEtape("E-DIT", fiche, 1, EHabilitationStatut.EN_ATTENTE);
+        BaCircuitEtape circuitEtape = buildCircuitEtape(fiche.getCircuit(), 1, "D-IT");
+        circuitEtape.setRole(role);
+        circuitEtape.setFonctionRequise(EFonctionEmploye.DIRECTEUR.name());
+        when(ficheHabilitationRepository.findByStatut(com.bakouan.app.enums.EStatut.A)).thenReturn(List.of(fiche));
+        when(ficheHabilitationEtapeRepository.findByFicheIdOrderByOrdre("F1")).thenReturn(List.of(etapeDit));
+        when(circuitEtapeRepository.findByCircuitIdOrderByOrdre("C1")).thenReturn(List.of(circuitEtape));
+
+        org.springframework.data.domain.Page<BaFicheHabilitationDto> result =
+                service.getMyFicheValidations(null, org.springframework.data.domain.PageRequest.of(0, 10));
+
+        assertEquals(1, result.getTotalElements());
+        assertEquals("F1", result.getContent().get(0).getId());
+    }
+
+    @Test
+    void getMyFicheValidations_acceptsBusinessRoleAliasWhenCircuitRoleMissing() {
+        BaRole roleDirecteur = buildRole("R-DIRECTEUR", "BA_DIRECTEUR");
+        BaUser directeur = buildUser("U-DIRECTEUR", EFonctionEmploye.AGENT, "D-IT", null);
+        directeur.getRoles().add(roleDirecteur);
+        BaUserDto current = new BaUserDto();
+        current.setId(directeur.getId());
+        BaRoleDto roleDto = new BaRoleDto();
+        roleDto.setId(roleDirecteur.getId());
+        roleDto.setCode(roleDirecteur.getCode());
+        current.getRoles().add(roleDto);
+        when(userService.getUserInfoWithMoreDetails()).thenReturn(current);
+        when(userRepository.findById(directeur.getId())).thenReturn(Optional.of(directeur));
+
+        BaFicheHabilitation fiche = buildFiche("F1");
+        fiche.setCircuit(buildCircuit("C1"));
+        BaFicheHabilitationEtape etape = buildEtape("E-DIT", fiche, 1, EHabilitationStatut.EN_ATTENTE);
+        BaCircuitEtape circuitEtape = buildCircuitEtape(fiche.getCircuit(), 1, "D-IT");
+        circuitEtape.setRole(null);
+        circuitEtape.setFonctionRequise(EFonctionEmploye.DIRECTEUR.name());
+        when(ficheHabilitationRepository.findByStatut(com.bakouan.app.enums.EStatut.A)).thenReturn(List.of(fiche));
+        when(ficheHabilitationEtapeRepository.findByFicheIdOrderByOrdre("F1")).thenReturn(List.of(etape));
+        when(circuitEtapeRepository.findByCircuitIdOrderByOrdre("C1")).thenReturn(List.of(circuitEtape));
+
+        org.springframework.data.domain.Page<BaFicheHabilitationDto> result =
+                service.getMyFicheValidations(null, org.springframework.data.domain.PageRequest.of(0, 10));
+
+        assertEquals(1, result.getTotalElements());
+    }
+
+    @Test
+    void getMyFicheValidations_rejectsDirectorRoleOutsideCircuitDepartment() {
+        BaRole roleDirecteur = buildRole("R-DIRECTEUR", "BA_DIRECTEUR");
+        BaUser directeurAutreDepartement = buildUser("U-DIRECTEUR-RH", EFonctionEmploye.AGENT, "D-RH", null);
+        directeurAutreDepartement.getRoles().add(roleDirecteur);
+        BaUserDto current = new BaUserDto();
+        current.setId(directeurAutreDepartement.getId());
+        BaRoleDto roleDto = new BaRoleDto();
+        roleDto.setId(roleDirecteur.getId());
+        roleDto.setCode(roleDirecteur.getCode());
+        current.getRoles().add(roleDto);
+        when(userService.getUserInfoWithMoreDetails()).thenReturn(current);
+        when(userRepository.findById(directeurAutreDepartement.getId())).thenReturn(Optional.of(directeurAutreDepartement));
+
+        BaFicheHabilitation fiche = buildFiche("F1");
+        fiche.setCircuit(buildCircuit("C1"));
+        BaFicheHabilitationEtape etape = buildEtape("E-DIT", fiche, 1, EHabilitationStatut.EN_ATTENTE);
+        BaCircuitEtape circuitEtape = buildCircuitEtape(fiche.getCircuit(), 1, "D-IT");
+        circuitEtape.setRole(null);
+        circuitEtape.setFonctionRequise(EFonctionEmploye.DIRECTEUR.name());
+        when(ficheHabilitationRepository.findByStatut(com.bakouan.app.enums.EStatut.A)).thenReturn(List.of(fiche));
+        when(ficheHabilitationEtapeRepository.findByFicheIdOrderByOrdre("F1")).thenReturn(List.of(etape));
+        when(circuitEtapeRepository.findByCircuitIdOrderByOrdre("C1")).thenReturn(List.of(circuitEtape));
+
+        org.springframework.data.domain.Page<BaFicheHabilitationDto> result =
+                service.getMyFicheValidations(null, org.springframework.data.domain.PageRequest.of(0, 10));
+
+        assertEquals(0, result.getTotalElements());
+    }
+
+    @Test
+    void getMyFicheValidations_acceptsActiveDirectorDelegationInSameDepartment() {
+        BaUser delegue = buildUser("U-DELEGUE", EFonctionEmploye.AGENT, "D-IT", null);
+        delegue.getRoles().clear();
+        BaUserDto current = new BaUserDto();
+        current.setId(delegue.getId());
+        when(userService.getUserInfoWithMoreDetails()).thenReturn(current);
+        when(userRepository.findById(delegue.getId())).thenReturn(Optional.of(delegue));
+
+        BaFicheHabilitation fiche = buildFiche("F1");
+        fiche.setCircuit(buildCircuit("C1"));
+        BaFicheHabilitationEtape etape = buildEtape("E-DIT", fiche, 1, EHabilitationStatut.EN_ATTENTE);
+        BaCircuitEtape circuitEtape = buildCircuitEtape(fiche.getCircuit(), 1, "D-IT");
+        circuitEtape.setRole(null);
+        circuitEtape.setFonctionRequise(EFonctionEmploye.DIRECTEUR.name());
+
+        BaDepartement departement = new BaDepartement();
+        departement.setId("D-IT");
+        BaValidationDelegation delegation = new BaValidationDelegation();
+        delegation.setId("DEL-1");
+        delegation.setDelegue(delegue);
+        delegation.setRoleCode("BA_DIRECTEUR");
+        delegation.setDepartement(departement);
+        delegation.setDateDebut(LocalDate.now().minusDays(1));
+        delegation.setDateFin(LocalDate.now().plusDays(1));
+        delegation.setActif(Boolean.TRUE);
+
+        when(ficheHabilitationRepository.findByStatut(com.bakouan.app.enums.EStatut.A)).thenReturn(List.of(fiche));
+        when(ficheHabilitationEtapeRepository.findByFicheIdOrderByOrdre("F1")).thenReturn(List.of(etape));
+        when(circuitEtapeRepository.findByCircuitIdOrderByOrdre("C1")).thenReturn(List.of(circuitEtape));
+        when(validationDelegationRepository.findByDelegueIdAndStatutAndActifTrueAndDateDebutLessThanEqualAndDateFinGreaterThanEqual(
+                delegue.getId(), com.bakouan.app.enums.EStatut.A, LocalDate.now(), LocalDate.now()))
+                .thenReturn(List.of(delegation));
+
+        org.springframework.data.domain.Page<BaFicheHabilitationDto> result =
+                service.getMyFicheValidations(null, org.springframework.data.domain.PageRequest.of(0, 10));
+
+        assertEquals(1, result.getTotalElements());
     }
 
     @Test
@@ -339,21 +427,43 @@ class BaBusinessServiceImplTest {
         when(userRepository.findById(directeur.getId())).thenReturn(Optional.of(directeur));
 
         BaFicheHabilitation fiche = buildFiche("F1");
-        BaEtapeDefinition definition = buildDefinition(
-                "DEF-DIT",
-                EHabilitationEtapeType.DEPARTEMENT,
-                EFonctionEmploye.CHEF_SERVICE,
-                "D-IT",
-                null);
-        BaFicheHabilitationEtape etapeDit = buildEtape("E-DIT", fiche, 1, EHabilitationStatut.EN_ATTENTE, definition);
+        fiche.setCircuit(buildCircuit("C1"));
+        BaFicheHabilitationEtape etapeDit = buildEtape("E-DIT", fiche, 1, EHabilitationStatut.EN_ATTENTE);
         when(ficheHabilitationRepository.findByStatut(com.bakouan.app.enums.EStatut.A)).thenReturn(List.of(fiche));
         when(ficheHabilitationEtapeRepository.findByFicheIdOrderByOrdre("F1")).thenReturn(List.of(etapeDit));
+        when(circuitEtapeRepository.findByCircuitIdOrderByOrdre("C1"))
+                .thenReturn(List.of(buildCircuitEtape(fiche.getCircuit(), 1, "D-IT")));
 
         org.springframework.data.domain.Page<BaFicheHabilitationDto> result =
                 service.getMyFicheValidations(null, org.springframework.data.domain.PageRequest.of(0, 10));
 
         assertEquals(1, result.getTotalElements());
         assertEquals("F1", result.getContent().get(0).getId());
+    }
+
+    @Test
+    void getAllFichesHabilitation_replacesInactivePendingValidator() {
+        BaUser inactiveDirecteur = buildUser("U-DIT-OLD", EFonctionEmploye.DIRECTEUR, "D-IT", null);
+        inactiveDirecteur.setActivated(Boolean.FALSE);
+        BaUser activeDirecteur = buildUser("U-DIT-NEW", EFonctionEmploye.DIRECTEUR, "D-IT", null);
+
+        BaFicheHabilitation fiche = buildFiche("F1");
+        fiche.setCircuit(buildCircuit("C1"));
+        BaFicheHabilitationEtape etapeDit = buildEtape("E-DIT", fiche, 1, EHabilitationStatut.EN_ATTENTE);
+        etapeDit.setValidateur(inactiveDirecteur);
+
+        when(ficheHabilitationRepository.findByStatut(com.bakouan.app.enums.EStatut.A)).thenReturn(List.of(fiche));
+        when(ficheHabilitationEtapeRepository.findByFicheIdOrderByOrdre("F1")).thenReturn(List.of(etapeDit));
+        when(circuitEtapeRepository.findByCircuitIdOrderByOrdre("C1"))
+                .thenReturn(List.of(buildCircuitEtape(fiche.getCircuit(), 1, "D-IT")));
+        when(userRepository.findByStatut(com.bakouan.app.enums.EStatut.A))
+                .thenReturn(List.of(inactiveDirecteur, activeDirecteur));
+        when(ficheHabilitationEtapeRepository.save(any(BaFicheHabilitationEtape.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<BaFicheHabilitationDto> result = service.getAllFichesHabilitation();
+
+        assertEquals("U-DIT-NEW", result.get(0).getEtapes().get(0).getIdValidateur());
     }
 
     @Test
@@ -365,10 +475,12 @@ class BaBusinessServiceImplTest {
         when(userRepository.findById(directeur.getId())).thenReturn(Optional.of(directeur));
 
         BaFicheHabilitation fiche = buildFiche("F1");
-        BaFicheHabilitationEtape etapeDit = buildEtape("E-DIT", fiche, 1, EHabilitationStatut.EN_ATTENTE,
-                buildDefinition("DEF-DIT", EHabilitationEtapeType.DEPARTEMENT, EFonctionEmploye.DIRECTEUR, "D-IT", null));
+        fiche.setCircuit(buildCircuit("C1"));
+        BaFicheHabilitationEtape etapeDit = buildEtape("E-DIT", fiche, 1, EHabilitationStatut.EN_ATTENTE);
         when(ficheHabilitationEtapeRepository.findById("E-DIT")).thenReturn(Optional.of(etapeDit));
         when(ficheHabilitationEtapeRepository.findByFicheIdOrderByOrdre("F1")).thenReturn(List.of(etapeDit));
+        when(circuitEtapeRepository.findByCircuitIdOrderByOrdre("C1"))
+                .thenReturn(List.of(buildCircuitEtape(fiche.getCircuit(), 1, "D-IT")));
         when(ficheHabilitationEtapeRepository.save(any(BaFicheHabilitationEtape.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(ficheHabilitationRepository.save(any(BaFicheHabilitation.class)))
@@ -382,7 +494,7 @@ class BaBusinessServiceImplTest {
     }
 
     @Test
-    void initFicheEtapesFromCircuit_createsMissingDepartmentDefinition() {
+    void initFicheEtapesFromCircuit_createsMissingDepartmentStep() {
         BaCircuit circuit = new BaCircuit();
         circuit.setId("C1");
         BaFicheHabilitation fiche = buildFiche("F1");
@@ -398,31 +510,22 @@ class BaBusinessServiceImplTest {
         circuitEtape.setOrdre(1);
         circuitEtape.setType(EHabilitationEtapeType.DEPARTEMENT);
         circuitEtape.setDepartement(departement);
+        circuitEtape.setRole(buildRole(DEFAULT_VALIDATOR_ROLE_ID, DEFAULT_VALIDATOR_ROLE_CODE));
 
         BaUser directeur = buildUser("U-DIT", EFonctionEmploye.DIRECTEUR, "D-IT", null);
 
         when(ficheHabilitationRepository.findById("F1")).thenReturn(Optional.of(fiche));
         when(circuitEtapeRepository.findByCircuitIdOrderByOrdre("C1")).thenReturn(List.of(circuitEtape));
         when(ficheHabilitationEtapeRepository.findByFicheId("F1")).thenReturn(List.of());
-        when(etapeDefinitionRepository.findByDepartementId("D-IT")).thenReturn(List.of());
-        when(userRepository.findByFonctionAndDepartementIdAndStatut(
-                EFonctionEmploye.DIRECTEUR, "D-IT", com.bakouan.app.enums.EStatut.A))
-                .thenReturn(List.of(directeur));
+        when(userRepository.findByStatut(com.bakouan.app.enums.EStatut.A)).thenReturn(List.of(directeur));
         when(ficheHabilitationEtapeRepository.save(any(BaFicheHabilitationEtape.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(ficheHabilitationEtapeRepository.findByFicheIdOrderByOrdre("F1")).thenAnswer(invocation -> {
-            BaEtapeDefinition definition = buildDefinition(
-                    "DEF-DIT",
-                    EHabilitationEtapeType.DEPARTEMENT,
-                    EFonctionEmploye.DIRECTEUR,
-                    "D-IT",
-                    null);
             BaFicheHabilitationEtape savedEtape = buildEtape(
                     "E-DIT",
                     fiche,
                     1,
-                    EHabilitationStatut.EN_ATTENTE,
-                    definition);
+                    EHabilitationStatut.EN_ATTENTE);
             savedEtape.setValidateur(directeur);
             return List.of(savedEtape);
         });
@@ -457,19 +560,13 @@ class BaBusinessServiceImplTest {
         circuitEtape.setOrdre(1);
         circuitEtape.setType(EHabilitationEtapeType.DEPARTEMENT);
         circuitEtape.setDepartement(departement);
+        circuitEtape.setRole(buildRole(DEFAULT_VALIDATOR_ROLE_ID, DEFAULT_VALIDATOR_ROLE_CODE));
 
-        BaEtapeDefinition definition = buildDefinition(
-                "DEF-DIT",
-                EHabilitationEtapeType.DEPARTEMENT,
-                EFonctionEmploye.DIRECTEUR,
-                "D-IT",
-                null);
         BaFicheHabilitationEtape currentEtape = buildEtape(
                 "E-DIT",
                 fiche,
                 1,
-                EHabilitationStatut.EN_ATTENTE,
-                definition);
+                EHabilitationStatut.EN_ATTENTE);
         currentEtape.setValidateur(directeur);
 
         when(ficheHabilitationRepository.findByStatut(com.bakouan.app.enums.EStatut.A)).thenReturn(List.of(fiche));
@@ -480,10 +577,7 @@ class BaBusinessServiceImplTest {
                 .thenReturn(List.of())
                 .thenReturn(List.of(currentEtape))
                 .thenReturn(List.of(currentEtape));
-        when(etapeDefinitionRepository.findByDepartementId("D-IT")).thenReturn(List.of(definition));
-        when(userRepository.findByFonctionAndDepartementIdAndStatut(
-                EFonctionEmploye.DIRECTEUR, "D-IT", com.bakouan.app.enums.EStatut.A))
-                .thenReturn(List.of(directeur));
+        when(userRepository.findByStatut(com.bakouan.app.enums.EStatut.A)).thenReturn(List.of(directeur));
         when(ficheHabilitationEtapeRepository.save(any(BaFicheHabilitationEtape.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -504,37 +598,43 @@ class BaBusinessServiceImplTest {
     private BaFicheHabilitationEtape buildEtape(final String id,
                                                 final BaFicheHabilitation fiche,
                                                 final Integer ordre,
-                                                final EHabilitationStatut statut,
-                                                final BaEtapeDefinition definition) {
+                                                final EHabilitationStatut statut) {
         BaFicheHabilitationEtape etape = new BaFicheHabilitationEtape();
         etape.setId(id);
         etape.setFiche(fiche);
         etape.setOrdre(ordre);
         etape.setStatutValidation(statut);
-        etape.setEtapeDefinition(definition);
         return etape;
     }
 
-    private BaEtapeDefinition buildDefinition(final String id,
-                                              final EHabilitationEtapeType type,
-                                              final EFonctionEmploye fonction,
-                                              final String departementId,
-                                              final String serviceId) {
-        BaEtapeDefinition definition = new BaEtapeDefinition();
-        definition.setId(id);
-        definition.setType(type);
-        definition.setFonctionRequise(fonction);
-        if (departementId != null) {
-            BaDepartement departement = new BaDepartement();
-            departement.setId(departementId);
-            definition.setDepartement(departement);
-        }
-        if (serviceId != null) {
-            BaService service = new BaService();
-            service.setId(serviceId);
-            definition.setService(service);
-        }
-        return definition;
+    private BaCircuit buildCircuit(final String id) {
+        BaCircuit circuit = new BaCircuit();
+        circuit.setId(id);
+        return circuit;
+    }
+
+    private BaCircuitEtape buildCircuitEtape(final BaCircuit circuit,
+                                             final Integer ordre,
+                                             final String departementId) {
+        BaCircuitEtape etape = new BaCircuitEtape();
+        etape.setId("CE-" + ordre);
+        etape.setCircuit(circuit);
+        etape.setOrdre(ordre);
+        etape.setType(EHabilitationEtapeType.DEPARTEMENT);
+        BaDepartement departement = new BaDepartement();
+        departement.setId(departementId);
+        departement.setNom(departementId);
+        etape.setDepartement(departement);
+        etape.setRole(buildRole(DEFAULT_VALIDATOR_ROLE_ID, DEFAULT_VALIDATOR_ROLE_CODE));
+        return etape;
+    }
+
+    private BaRole buildRole(final String id, final String code) {
+        BaRole role = new BaRole();
+        role.setId(id);
+        role.setCode(code);
+        role.setLibelle(code);
+        return role;
     }
 
     private BaUser buildUser(final String id,
@@ -544,6 +644,9 @@ class BaBusinessServiceImplTest {
         BaUser user = new BaUser();
         user.setId(id);
         user.setFonction(fonction);
+        user.setActivated(Boolean.TRUE);
+        user.setLocked(Boolean.FALSE);
+        user.getRoles().add(buildRole(DEFAULT_VALIDATOR_ROLE_ID, DEFAULT_VALIDATOR_ROLE_CODE));
         if (departementId != null) {
             BaDepartement departement = new BaDepartement();
             departement.setId(departementId);

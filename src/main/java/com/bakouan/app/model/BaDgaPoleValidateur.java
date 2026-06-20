@@ -10,38 +10,37 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import lombok.AllArgsConstructor;
+import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
+import java.time.LocalDate;
 
 @Entity
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
-public class BaDepartement extends BaAbstractAuditingEntity {
-
+@Table(name = "ba_dga_pole_validateur")
+public class BaDgaPoleValidateur extends BaAbstractAuditingEntity {
     @Id
     @Column(name = "id")
     private String id = BaUtils.randomUUID();
 
-    @Column(name = "code", unique = true)
-    private String code;
-
-    @Column(name = "nom")
-    private String nom;
-
     @Enumerated(EnumType.STRING)
-    @Column(name = "dga_pole", length = 30)
-    private EDgaPole dgaPole;
+    @Column(name = "pole", nullable = false, length = 30)
+    private EDgaPole pole;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_departement_id")
-    private BaDepartement parentDepartement;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "dga_id", nullable = false)
+    private BaUser dga;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "dga_validateur_id")
-    private BaUser dgaValidateur;
+    @Column(name = "date_debut", nullable = false)
+    private LocalDate dateDebut;
 
+    @Column(name = "date_fin")
+    private LocalDate dateFin;
+
+    @Column(name = "actif", nullable = false)
+    private Boolean actif = Boolean.TRUE;
 }
