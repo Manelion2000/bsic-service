@@ -26,6 +26,9 @@ import java.time.ZonedDateTime;
 @Entity
 @Table(name = "ba_autorisation_sortie")
 public class BaAutorisationSortie extends BaAbstractAuditingEntity {
+    @jakarta.persistence.OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "circuit_id", unique = true)
+    private BaRhCircuit circuit;
 
     @Id
     @Column(name = "id")

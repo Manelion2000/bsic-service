@@ -5,7 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -21,12 +21,12 @@ import jakarta.validation.constraints.Size;
 @AllArgsConstructor
 public class BaLoginDto {
 
-    @NotEmpty
+    @NotBlank
     @Size(min = 1, max = 50)
     private String username;
 
-    @NotEmpty
-    @Size(min = 1, max = 50)
+    @NotBlank
+    @Size(min = 1, max = 72)
     private String password;
 
     private Boolean rememberMe;

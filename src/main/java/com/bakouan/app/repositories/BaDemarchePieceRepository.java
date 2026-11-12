@@ -1,0 +1,3 @@
+package com.bakouan.app.repositories;import com.bakouan.app.model.BaDemarchePiece; public interface BaDemarchePieceRepository extends org.springframework.data.jpa.repository.JpaRepository<BaDemarchePiece,String>{java.util.List<BaDemarchePiece> findByDossierIdAndStatut(String id,com.bakouan.app.enums.EStatut statut);
+ @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE) @org.springframework.data.jpa.repository.Query("select d from BaDemarchePiece d where d.id=:id") java.util.Optional<BaDemarchePiece> findLockedById(@org.springframework.data.repository.query.Param("id") String id);
+ }

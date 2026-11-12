@@ -123,17 +123,43 @@ public class BaRestExceptionHandler {
      * @param request WebRequest
      * @return un objet de type ResponseEntity
      */
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Object> handleUnsupportedMethod(final org.springframework.web.HttpRequestMethodNotSupportedException ex) {
+        HttpHeaders headers = new HttpHeaders();
+        if (ex.getSupportedHttpMethods() != null) headers.setAllow(ex.getSupportedHttpMethods());
+        return new ResponseEntity<>(new BaApiErrorDetail(HttpStatus.METHOD_NOT_ALLOWED,
+                "Cette opération n'est pas disponible sur cette ressource.", ex), headers, HttpStatus.METHOD_NOT_ALLOWED);
+    }
+
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Object> handleInvalidParameter(final org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex) {
+        return new ResponseEntity<>(new BaApiErrorDetail(HttpStatus.BAD_REQUEST,
+                "Paramètre invalide : " + ex.getName() + ".", ex), HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<Object> handleMissingResource(final org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+        return new ResponseEntity<>(new BaApiErrorDetail(HttpStatus.NOT_FOUND, "Ressource introuvable.", ex), HttpStatus.NOT_FOUND);
+    }
+
     @ExceptionHandler({Exception.class})
     public ResponseEntity<Object> handleAll(final Exception ex, final WebRequest request) {
         BaApiErrorDetail detailErreur;
-        if (ex instanceof final ResponseStatusException responseStatusException) {
+        if (ex instanceof org.springframework.web.multipart.MaxUploadSizeExceededException) {
+            detailErreur = new BaApiErrorDetail(HttpStatus.PAYLOAD_TOO_LARGE,
+                    "Le fichier ou la sélection dépasse la taille autorisée : 10 Mo par fichier, 20 Mo de manuels par enregistrement.", ex);
+        } else if (ex instanceof final ResponseStatusException responseStatusException) {
             detailErreur = new BaApiErrorDetail(HttpStatus.resolve(responseStatusException.getStatusCode().value()),
                     responseStatusException.getReason(), ex);
         }
          else if (ex instanceof InsufficientAuthenticationException) { detailErreur =
          new BaApiErrorDetail(HttpStatus.FORBIDDEN, "Utilisateur non connecté", ex); }
+          else if (ex instanceof org.springframework.dao.ConcurrencyFailureException || ex instanceof jakarta.persistence.OptimisticLockException || ex instanceof jakarta.persistence.PessimisticLockException) {
+              detailErreur = new BaApiErrorDetail(HttpStatus.CONFLICT,"Une operation concurrente a modifie la demande. Actualisez avant de reessayer.",ex);
+          }
           else {
-            detailErreur = new BaApiErrorDetail(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), ex);
+            detailErreur = new BaApiErrorDetail(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Une erreur interne est survenue. Veuillez reessayer plus tard.", ex);
         }
         log.error("Exception occurred : ", ex);
         return new ResponseEntity<>(detailErreur, new HttpHeaders(), detailErreur.getStatus());

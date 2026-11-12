@@ -1,7 +1,13 @@
 package com.bakouan.app.security.jwt;
 
-import com.bakouan.app.model.BaUser;
+import com.bakouan.app.security.BaSecurityErrorHandler;
 import com.bakouan.app.security.BaUserDetailsService;
+import com.bakouan.app.security.CredentialUserDetails;
+import com.bakouan.app.security.CredentialSession;
+import java.util.List;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import com.bakouan.app.utils.BaConstants;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletRequest;
@@ -9,94 +15,95 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.GenericFilterBean;
 
 import java.io.IOException;
-import java.util.Optional;
 
-/**
- * Filters incoming requests and installs a Spring Security principal if a header corresponding to a valid user is
- * found.
- *
- * @author : <A HREF="mailto:lankoande.yabo.dev@gmail.com">Yienouyaba LANKOANDE (YaboLANK)</A>
- * @version : 1.0
- * Copyright (c) 2021 All rights reserved.
- * @since : 14/05/2021 à 12:18
- */
-@Slf4j
 @RequiredArgsConstructor
 public class JWTFilter extends GenericFilterBean {
 
     public static final String AUTHORIZATION_HEADER = "Authorization";
-
     public static final String AUTHORIZATION_TOKEN = "access_token";
 
     private final TokenProvider tokenProvider;
-
     private final BaUserDetailsService userDetailsService;
     private final RevokedTokenService revokedTokenService;
+    private final BaSecurityErrorHandler securityErrorHandler;
 
-
-    /**
-     * Fonction de filtre.
-     *
-     * @param servletRequest
-     * @param servletResponse
-     * @param filterChain
-     * @throws IOException
-     * @throws ServletException
-     */
     @Override
-    public void doFilter(final ServletRequest servletRequest,
-                         final ServletResponse servletResponse, final FilterChain filterChain)
-            throws IOException, ServletException {
-        HttpServletRequest httpServletRequest = (HttpServletRequest) servletRequest;
+    public void doFilter(final ServletRequest servletRequest, final ServletResponse servletResponse,
+                         final FilterChain filterChain) throws IOException, ServletException {
+        HttpServletRequest request = (HttpServletRequest) servletRequest;
         HttpServletResponse response = (HttpServletResponse) servletResponse;
-        String jwt = resolveToken(httpServletRequest);
-        if (StringUtils.hasText(jwt) && revokedTokenService.isRevoked(jwt)) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.getWriter().write("Token is revoked");
-            log.warn("Revoked token used");
+        // Un ancien token ne doit pas empecher une nouvelle connexion ou reinitialisation.
+        if (isSessionEndpoint(request)) {
+            filterChain.doFilter(request, response);
             return;
         }
-
+        String jwt = resolveToken(request);
         if (StringUtils.hasText(jwt) && SecurityContextHolder.getContext().getAuthentication() == null) {
-            if (tokenProvider.validateToken(jwt)) {
-                String username = tokenProvider.extractUsername(jwt);
-                final Optional<BaUser> user = userDetailsService.getOneByUsername(username);
-                if (user.isEmpty()
-                        || Boolean.TRUE.equals(user.get().getLocked())) {
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                    response.getWriter().write("Account is blocked");
-                    log.warn("Account is blocked");
-                    return;
-                }
-                Authentication authentication = this.tokenProvider.getAuthentication(jwt);
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+            if (revokedTokenService.isRevoked(jwt) || !tokenProvider.validateToken(jwt)) {
+                reject(response);
+                return;
             }
+            UserDetails user;
+            try {
+                user = userDetailsService.loadUserByUsername(tokenProvider.extractUsername(jwt));
+            } catch (UsernameNotFoundException | JwtException ex) {
+                reject(response);
+                return;
+            }
+            if (!user.isEnabled() || !user.isAccountNonLocked()
+                    || !user.isAccountNonExpired() || !user.isCredentialsNonExpired()) {
+                reject(response);
+                return;
+            }
+            long version;
+            boolean setup;
+            try{version=tokenProvider.credentialVersion(jwt);setup=tokenProvider.passwordSetup(jwt);}
+            catch(JwtException|IllegalArgumentException ex){reject(response);return;}
+            if(user instanceof CredentialUserDetails details){
+                if(version!=details.getCredentialVersion()||setup!=details.isPasswordChangeRequired()||(setup&&!details.isTemporaryPasswordUsed())){reject(response);return;}
+            }else if(setup){reject(response);return;}
+            if(setup&&!("PUT".equals(request.getMethod())&&request.getServletPath().equals(BaConstants.URL.BASE_URL+BaConstants.URL.USER+"/complete-initial-password"))){
+                SecurityContextHolder.clearContext();securityErrorHandler.passwordChangeRequired(response);return;
+            }
+            // Utiliser les droits actuels, pas les roles figes lors de l'emission du JWT.
+            var authentication = new UsernamePasswordAuthenticationToken(user, null, setup?List.of(new SimpleGrantedAuthority("PASSWORD_SETUP_ONLY")):user.getAuthorities());
+            authentication.setDetails(new CredentialSession(version,setup));
+            authentication.eraseCredentials();
+            SecurityContextHolder.getContext().setAuthentication(authentication);
         }
-        filterChain.doFilter(servletRequest, servletResponse);
+        filterChain.doFilter(request, response);
     }
 
-    /**
-     * Resolve a token.
-     *
-     * @param request
-     * @return le token
-     */
+    private void reject(final HttpServletResponse response) throws IOException {
+        SecurityContextHolder.clearContext();
+        securityErrorHandler.unauthorized(response);
+    }
+
+    private boolean isSessionEndpoint(final HttpServletRequest request) {
+        String path = request.getServletPath();
+        String base = BaConstants.URL.BASE_URL;
+        return ("POST".equals(request.getMethod())
+                && (path.equals(base + BaConstants.URL.AUTHENTICATE)
+                    || path.equals(base + BaConstants.URL.LOGOUT)))
+                || ("PUT".equals(request.getMethod())
+                && (path.equals(base + BaConstants.URL.USER + "/request-reset-password")
+                    || path.equals(base + BaConstants.URL.USER + "/complete-reset-password")));
+    }
+
     private String resolveToken(final HttpServletRequest request) {
         String bearerToken = request.getHeader(AUTHORIZATION_HEADER);
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(Integer.parseInt("7"));
+            return bearerToken.substring(7);
         }
-        String jwt = request.getParameter(AUTHORIZATION_TOKEN);
-        if (StringUtils.hasText(jwt)) {
-            return jwt;
-        }
+        // Les parametres d'URL sont journalises par les proxies et l'historique du navigateur.
         return null;
     }
 }

@@ -49,6 +49,8 @@ public class BaBusinessServiceImpl implements BaBusinessService {
     private final YtMapper mapper = Mappers.getMapper(YtMapper.class);
     private final BaLogService logService;
     private final BaUserService userService;
+    private final com.bakouan.app.service.SignatureService signatures;
+    private final com.bakouan.app.service.DirectionGeneraleService directionGeneraleService;
 
     private final BaServiceRepository serviceRepository;
     private final BaDepartementRepository departementRepository;
@@ -57,6 +59,7 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
 
     private final BaPlateformeRepository plateformeRepository;
+    private final com.bakouan.app.service.PlateformeCatalogueService plateformeCatalogueService;
     private final BaCircuitRepository circuitRepository;
     private final BaCircuitEtapeRepository circuitEtapeRepository;
     private final BaFicheHabilitationRepository ficheHabilitationRepository;
@@ -85,6 +88,7 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
     @Override
     public BaServiceDto createService(final BaServiceDto dto) {
+        userService.requireAdministrator();
         logService.log(new BaLogDto(EAction.C, "Service " + dto.getCode()));
         if (serviceRepository.existsByCode(dto.getCode())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Il existe deja un service avec ce code");
@@ -100,6 +104,7 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
     @Override
     public BaServiceDto updateService(final String id, final BaServiceDto dto) {
+        userService.requireAdministrator();
         logService.log(new BaLogDto(EAction.U, "Service " + id));
         BaService entity = serviceRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Service introuvable"));
@@ -133,6 +138,7 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
     @Override
     public BaDepartementDto createDepartement(final BaDepartementDto dto) {
+        userService.requireAdministrator();
         logService.log(new BaLogDto(EAction.C, "Departement " + dto.getCode()));
         if (departementRepository.existsByCode(dto.getCode())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Il existe deja un departement avec ce code");
@@ -146,6 +152,7 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
     @Override
     public BaDepartementDto updateDepartement(final String id, final BaDepartementDto dto) {
+        userService.requireAdministrator();
         logService.log(new BaLogDto(EAction.U, "Departement " + id));
         BaDepartement entity = departementRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Departement introuvable"));
@@ -168,6 +175,7 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
     @Override
     public BaAgenceDto createAgence(final BaAgenceDto dto) {
+        userService.requireAdministrator();
         logService.log(new BaLogDto(EAction.C, "Agence " + dto.getCode()));
         if (agenceRepository.existsByCode(dto.getCode())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Il existe deja une agence avec ce code");
@@ -184,6 +192,7 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
     @Override
     public BaAgenceDto updateAgence(final String id, final BaAgenceDto dto){
+        userService.requireAdministrator();
         logService.log(new BaLogDto(EAction.U, "Agence " + id));
         BaAgence entity=agenceRepository.findById(id).orElseThrow(
                 ()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"agence introuvable"));
@@ -213,7 +222,7 @@ public class BaBusinessServiceImpl implements BaBusinessService {
         List<BaUser> employes = userRepository.findByStatut(EStatut.A);
         List<BaUser> filtered = employes.stream()
                 .filter(employe -> BaUtils.isEmpty(departementId) ||
-                        (employe.getDepartement() != null && departementId.equals(employe.getDepartement().getId())))
+                        (directoryDepartment(employe) != null && departementId.equals(directoryDepartment(employe).getId())))
                 .filter(employe -> BaUtils.isEmpty(serviceId) ||
                         (employe.getService() != null && serviceId.equals(employe.getService().getId())))
                 .filter(employe -> BaUtils.isEmpty(agenceId) ||
@@ -222,8 +231,8 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
         List<BaUser> sorted = filtered.stream()
                 .sorted((a, b) -> {
-                    String depA = a.getDepartement() == null ? "ZZZ" : a.getDepartement().getNom();
-                    String depB = b.getDepartement() == null ? "ZZZ" : b.getDepartement().getNom();
+                    String depA = directoryDepartment(a) == null ? "ZZZ" : java.util.Objects.toString(directoryDepartment(a).getNom(), "");
+                    String depB = directoryDepartment(b) == null ? "ZZZ" : java.util.Objects.toString(directoryDepartment(b).getNom(), "");
                     int cmp = depA.compareToIgnoreCase(depB);
                     if (cmp != 0) {
                         return cmp;
@@ -244,8 +253,8 @@ public class BaBusinessServiceImpl implements BaBusinessService {
         java.util.Map<String, BaAnnuaireDepartementDto> departements = new java.util.LinkedHashMap<>();
 
         for (BaUser employe : sorted) {
-            String depId = employe.getDepartement() == null ? null : employe.getDepartement().getId();
-            String depNom = employe.getDepartement() == null ? "Non renseigne" : employe.getDepartement().getNom();
+            String depId = directoryDepartment(employe) == null ? null : directoryDepartment(employe).getId();
+            String depNom = directoryDepartment(employe) == null ? "Non renseigne" : directoryDepartment(employe).getNom();
             String depKey = depId == null ? "__NONE__" : depId;
 
             BaAnnuaireDepartementDto departementDto = departements.get(depKey);
@@ -264,6 +273,7 @@ public class BaBusinessServiceImpl implements BaBusinessService {
             agentDto.setEmail(BaUtils.isEmpty(employe.getEmailPro()) ? employe.getEmail() : employe.getEmailPro());
             agentDto.setNumeroPoste(employe.getTelephoneFixe());
             agentDto.setTelephoneSecondaire(employe.getTelephoneMobile());
+            agentDto.setTelephone(employe.getTelephone());
             agentDto.setIdService(employe.getService() == null ? null : employe.getService().getId());
             agentDto.setNomService(employe.getService() == null ? null : employe.getService().getNom());
             agentDto.setIdAgence(employe.getAgence() == null ? null : employe.getAgence().getId());
@@ -282,14 +292,14 @@ public class BaBusinessServiceImpl implements BaBusinessService {
         List<BaUser> employes = userRepository.findByStatut(EStatut.A);
         List<BaUser> filtered = employes.stream()
                 .filter(employe -> BaUtils.isEmpty(departementId) ||
-                        (employe.getDepartement() != null && departementId.equals(employe.getDepartement().getId())))
+                        (directoryDepartment(employe) != null && departementId.equals(directoryDepartment(employe).getId())))
                 .filter(employe -> BaUtils.isEmpty(serviceId) ||
                         (employe.getService() != null && serviceId.equals(employe.getService().getId())))
                 .filter(employe -> BaUtils.isEmpty(agenceId) ||
                         (employe.getAgence() != null && agenceId.equals(employe.getAgence().getId())))
                 .sorted((a, b) -> {
-                    String depA = a.getDepartement() == null ? "ZZZ" : a.getDepartement().getNom();
-                    String depB = b.getDepartement() == null ? "ZZZ" : b.getDepartement().getNom();
+                    String depA = directoryDepartment(a) == null ? "ZZZ" : java.util.Objects.toString(directoryDepartment(a).getNom(), "");
+                    String depB = directoryDepartment(b) == null ? "ZZZ" : java.util.Objects.toString(directoryDepartment(b).getNom(), "");
                     int cmp = depA.compareToIgnoreCase(depB);
                     if (cmp != 0) {
                         return cmp;
@@ -310,8 +320,8 @@ public class BaBusinessServiceImpl implements BaBusinessService {
         Map<String, BaPublicAnnuaireDepartementDto> departements = new LinkedHashMap<>();
 
         for (BaUser employe : filtered) {
-            String depId = employe.getDepartement() == null ? null : employe.getDepartement().getId();
-            String depNom = employe.getDepartement() == null ? "Non renseigne" : employe.getDepartement().getNom();
+            String depId = directoryDepartment(employe) == null ? null : directoryDepartment(employe).getId();
+            String depNom = directoryDepartment(employe) == null ? "Non renseigne" : directoryDepartment(employe).getNom();
             String depKey = depId == null ? "__NONE__" : depId;
 
             BaPublicAnnuaireDepartementDto departementDto = departements.get(depKey);
@@ -329,6 +339,7 @@ public class BaBusinessServiceImpl implements BaBusinessService {
             agentDto.setFonction(employe.getFonction() == null ? null : employe.getFonction().name());
             agentDto.setEmail(resolvePublicBsicEmail(employe));
             agentDto.setNumeroPoste(employe.getTelephoneFixe());
+            agentDto.setTelephone(employe.getTelephone());
             agentDto.setIdService(employe.getService() == null ? null : employe.getService().getId());
             agentDto.setNomService(employe.getService() == null ? null : employe.getService().getNom());
             agentDto.setIdAgence(employe.getAgence() == null ? null : employe.getAgence().getId());
@@ -338,6 +349,10 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
         result.addAll(departements.values());
         return result;
+    }
+
+    private BaDepartement directoryDepartment(BaUser agent) {
+        return agent.getDepartement()!=null?agent.getDepartement():agent.getService()==null?null:agent.getService().getDepartement();
     }
 
     private String resolvePublicBsicEmail(final BaUser employe) {
@@ -361,39 +376,12 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
     @Override
     public BaPlateformeDto createPlateforme(final BaPlateformeDto dto) {
-        logService.log(new BaLogDto(EAction.C, "Plateforme " + dto.getCode()));
-        if (plateformeRepository.existsByCode(dto.getCode())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Il existe deja une plateforme avec ce code");
-        }
-        BaPlateforme entity = mapper.maps(dto);
-        entity.setId(BaUtils.randomUUID());
-        if (!BaUtils.isEmpty(dto.getIdCircuit())) {
-            entity.setCircuit(circuitRepository.findById(dto.getIdCircuit())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Circuit introuvable")));
-        }
-        return mapper.maps(plateformeRepository.save(entity));
+        return plateformeCatalogueService.legacyCreate(dto);
     }
 
     @Override
     public BaPlateformeDto updatePlateforme(final String id, final BaPlateformeDto dto) {
-        logService.log(new BaLogDto(EAction.U, "Plateforme " + id));
-        BaPlateforme entity = plateformeRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Plateforme introuvable"));
-        if (!BaUtils.isEmpty(dto.getCode()) && !dto.getCode().equalsIgnoreCase(entity.getCode())
-                && plateformeRepository.existsByCode(dto.getCode())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Il existe deja une plateforme avec ce code");
-        }
-        entity.setCode(dto.getCode());
-        entity.setNom(dto.getNom());
-        entity.setDescription(dto.getDescription());
-        entity.setTypePlateforme(dto.getTypePlateforme() == null ? ETypePlateforme.RESEAUX : dto.getTypePlateforme());
-        if (!BaUtils.isEmpty(dto.getIdCircuit())) {
-            entity.setCircuit(circuitRepository.findById(dto.getIdCircuit())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Circuit introuvable")));
-        } else {
-            entity.setCircuit(null);
-        }
-        return mapper.maps(plateformeRepository.save(entity));
+        return plateformeCatalogueService.legacyUpdate(id, dto);
     }
 
     public List<BaFicheHabilitationDto> getAllFichesHabilitation() {
@@ -550,8 +538,10 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
     @Override
     public BaFicheHabilitationEtapeDto updateEtapeStatus(final String etapeId, final EHabilitationStatut statut, final String commentaire) {
+        if (statut != EHabilitationStatut.VALIDE && statut != EHabilitationStatut.REJETE)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choisissez une approbation ou un refus.");
         logService.log(new BaLogDto(EAction.U, "MAJ etape habilitation " + etapeId));
-        BaFicheHabilitationEtape entity = ficheHabilitationEtapeRepository.findById(etapeId)
+        BaFicheHabilitationEtape entity = ficheHabilitationEtapeRepository.findLockedById(etapeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Etape introuvable"));
         BaFicheHabilitation fiche = entity.getFiche();
         if (fiche.getStatutHabilitation() == EHabilitationFicheStatut.REJETEE
@@ -584,6 +574,8 @@ public class BaBusinessServiceImpl implements BaBusinessService {
         }
         entity.setValidateur(currentEmploye);
         entity.setDateValidation(java.time.ZonedDateTime.now());
+        if (statut == EHabilitationStatut.VALIDE)
+            signatures.capture("FICHE", fiche.getId(), entity.getOrdre(), currentEmploye, entity.getDateValidation().toInstant());
         entity.setStatutValidation(statut);
         BaFicheHabilitationEtape saved = ficheHabilitationEtapeRepository.save(entity);
         if (statut == EHabilitationStatut.REJETE) {
@@ -703,7 +695,9 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
     @Override
     public BaReinitialisationCompteDto updateReinitialisationEtapeStatus(final String etapeId, final EHabilitationStatut statut, final String commentaire) {
-        BaReinitialisationCompteEtape etape = reinitialisationCompteEtapeRepository.findById(etapeId)
+        if (statut != EHabilitationStatut.VALIDE && statut != EHabilitationStatut.REJETE)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choisissez une approbation ou un refus.");
+        BaReinitialisationCompteEtape etape = reinitialisationCompteEtapeRepository.findLockedById(etapeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Etape introuvable."));
         BaReinitialisationCompte demande = etape.getDemande();
         if (demande.getStatutDemande() != EReinitialisationCompteStatut.EN_COURS) {
@@ -725,6 +719,8 @@ public class BaBusinessServiceImpl implements BaBusinessService {
         etape.setStatutValidation(statut);
         etape.setCommentaire(statut == EHabilitationStatut.VALIDE ? "Avis favorable" : commentaire.trim());
         etape.setDateValidation(java.time.ZonedDateTime.now());
+        if (statut == EHabilitationStatut.VALIDE)
+            signatures.capture("REINITIALISATION", demande.getId(), etape.getOrdre(), currentUser, etape.getDateValidation().toInstant());
         reinitialisationCompteEtapeRepository.save(etape);
         if (statut == EHabilitationStatut.REJETE) {
             demande.setStatutDemande(EReinitialisationCompteStatut.REJETEE);
@@ -984,6 +980,7 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
     @Override
     public BaValidationDelegationDto createValidationDelegation(final BaValidationDelegationDto dto) {
+        userService.requireAdministrator();
         logService.log(new BaLogDto(EAction.C, "Delegation validation"));
         BaValidationDelegation entity = new BaValidationDelegation();
         entity.setId(BaUtils.randomUUID());
@@ -994,6 +991,7 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
     @Override
     public BaValidationDelegationDto updateValidationDelegation(final String id, final BaValidationDelegationDto dto) {
+        userService.requireAdministrator();
         logService.log(new BaLogDto(EAction.U, "Delegation validation " + id));
         BaValidationDelegation entity = validationDelegationRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Delegation introuvable"));
@@ -1004,6 +1002,7 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
     @Override
     public void desactiverValidationDelegation(final String id) {
+        userService.requireAdministrator();
         logService.log(new BaLogDto(EAction.D, "Delegation validation " + id));
         BaValidationDelegation entity = validationDelegationRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Delegation introuvable"));
@@ -1014,69 +1013,22 @@ public class BaBusinessServiceImpl implements BaBusinessService {
 
     @Override
     public List<BaDgaPoleValidateurDto> getDgaPoleValidateurs() {
-        return dgaPoleValidateurRepository.findByStatutOrderByCreatedDateDesc(EStatut.A).stream()
-                .map(this::toDgaPoleValidateurDto)
-                .collect(Collectors.toList());
+        return directionGeneraleService.getAssignments();
     }
 
     @Override
     public BaDgaPoleValidateurDto createDgaPoleValidateur(final BaDgaPoleValidateurDto dto) {
-        logService.log(new BaLogDto(EAction.C, "DGA pole validateur"));
-        BaDgaPoleValidateur entity = new BaDgaPoleValidateur();
-        entity.setId(BaUtils.randomUUID());
-        hydrateDgaPoleValidateur(entity, dto);
-        entity.setActif(dto.getActif() == null || dto.getActif());
-        return toDgaPoleValidateurDto(dgaPoleValidateurRepository.save(entity));
+        return directionGeneraleService.saveAssignment(null, dto);
     }
 
     @Override
     public BaDgaPoleValidateurDto updateDgaPoleValidateur(final String id, final BaDgaPoleValidateurDto dto) {
-        logService.log(new BaLogDto(EAction.U, "DGA pole validateur " + id));
-        BaDgaPoleValidateur entity = dgaPoleValidateurRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Configuration DGA introuvable"));
-        hydrateDgaPoleValidateur(entity, dto);
-        entity.setActif(dto.getActif() == null || dto.getActif());
-        return toDgaPoleValidateurDto(dgaPoleValidateurRepository.save(entity));
+        return directionGeneraleService.saveAssignment(id, dto);
     }
 
     @Override
     public void desactiverDgaPoleValidateur(final String id) {
-        logService.log(new BaLogDto(EAction.D, "DGA pole validateur " + id));
-        BaDgaPoleValidateur entity = dgaPoleValidateurRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Configuration DGA introuvable"));
-        entity.setActif(false);
-        entity.setStatut(EStatut.D);
-        dgaPoleValidateurRepository.save(entity);
-    }
-
-    private void hydrateDgaPoleValidateur(final BaDgaPoleValidateur entity, final BaDgaPoleValidateurDto dto) {
-        if (dto == null || dto.getPole() == null || BaUtils.isEmpty(dto.getIdDga()) || dto.getDateDebut() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Pole, DGA et date debut obligatoires");
-        }
-        if (dto.getDateFin() != null && dto.getDateFin().isBefore(dto.getDateDebut())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Periode DGA invalide");
-        }
-        BaUser dga = userRepository.findById(dto.getIdDga())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "DGA introuvable"));
-        if (!hasRole(dga, "BA_DGA") && dga.getFonction() != EFonctionEmploye.DIRECTEUR_GENERAL_ADJOINT) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "L'utilisateur doit etre DGA ou avoir le role BA_DGA");
-        }
-        entity.setPole(dto.getPole());
-        entity.setDga(dga);
-        entity.setDateDebut(dto.getDateDebut());
-        entity.setDateFin(dto.getDateFin());
-    }
-
-    private BaDgaPoleValidateurDto toDgaPoleValidateurDto(final BaDgaPoleValidateur entity) {
-        BaDgaPoleValidateurDto dto = new BaDgaPoleValidateurDto();
-        dto.setId(entity.getId());
-        dto.setPole(entity.getPole());
-        dto.setIdDga(entity.getDga() == null ? null : entity.getDga().getId());
-        dto.setNomDga(fullName(entity.getDga()));
-        dto.setDateDebut(entity.getDateDebut());
-        dto.setDateFin(entity.getDateFin());
-        dto.setActif(entity.getActif());
-        return dto;
+        directionGeneraleService.deactivateAssignment(id);
     }
 
     private void hydrateValidationDelegation(final BaValidationDelegation entity,
@@ -1271,7 +1223,9 @@ public class BaBusinessServiceImpl implements BaBusinessService {
                         "Les plateformes d'une meme fiche doivent utiliser le meme circuit.");
             }
         }
-        return plateformes.get(0).getCircuit();
+        BaCircuit selected=plateformes.get(0).getCircuit();
+        if(selected.isAutonome())throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Les fiches techniques utilisent leur circuit d’habilitation. Configurez la démarche générique depuis le catalogue.");
+        return selected;
     }
 
     private void saveFichePlateformes(final BaFicheHabilitation fiche, final List<BaPlateforme> plateformes) {

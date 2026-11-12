@@ -56,7 +56,8 @@ public interface YtMapper {
             @Mapping(target = "agence", ignore = true),
             @Mapping(target = "superieur", ignore = true),
             @Mapping(target = "superieurSecondaire", ignore = true),
-            @Mapping(target = "profil", ignore = true)
+            @Mapping(target = "profil", ignore = true),
+            @Mapping(target = "passwordChangeRequired", ignore = true)
     })
     BaUser maps(BaUserDto dto);
 

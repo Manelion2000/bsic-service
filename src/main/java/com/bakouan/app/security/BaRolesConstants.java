@@ -14,6 +14,7 @@ public final class BaRolesConstants {
      * Tout utilisateur disposant d'un compte(role commun).
      */
     public static final String BA_CONNECT = "BA_CONNECT";
+    public static final String RH_CONSULTATION_ABSENCES = "RH_CONSULTATION_ABSENCES";
 
     public static final String HABILITATION_CREATION_COMPTE_RESEAUX = "HABILITATION_CREATION_COMPTE_RESEAUX";
 

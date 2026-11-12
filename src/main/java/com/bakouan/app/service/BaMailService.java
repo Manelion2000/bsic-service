@@ -66,12 +66,11 @@ public class BaMailService {
                           final boolean isHtml, final String receiverName,
                           final File... attachements) {
         log.debug(
-                "Send email[multipart '{}' and html '{}'] to '{}' with subject '{}' and content={}",
+                "Send email[multipart '{}' and html '{}'] to '{}' with subject '{}'",
                 isMultipart,
                 isHtml,
                 to,
-                subject,
-                content
+                subject
         );
 
         // Prepare message using a Spring helper

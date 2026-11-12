@@ -5,6 +5,7 @@ import lombok.Data;
 
 @Data
 public class BaPlateformeDto {
+    private Long version;
     private String id;
     private String code;
     private String nom;

@@ -8,7 +8,6 @@ import com.bakouan.app.dto.BaRhDemandesStatsDto;
 import com.bakouan.app.dto.BaStatItemDto;
 import com.bakouan.app.dto.BaUserDto;
 import com.bakouan.app.enums.EAutorisationSortieStatut;
-import com.bakouan.app.enums.EFonctionEmploye;
 import com.bakouan.app.enums.EStatut;
 import com.bakouan.app.mapper.YtMapper;
 import com.bakouan.app.model.BaAgence;
@@ -23,6 +22,7 @@ import com.bakouan.app.repositories.BaServiceRepository;
 import com.bakouan.app.repositories.BaUserRepository;
 import com.bakouan.app.security.BaUserService;
 import com.bakouan.app.service.BaAutorisationSortieService;
+import com.bakouan.app.service.RhCircuitService;
 import com.bakouan.app.utils.BaUtils;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +32,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
@@ -43,7 +42,6 @@ import java.util.stream.Collectors;
 @Transactional
 @RequiredArgsConstructor
 public class BaAutorisationSortieServiceImpl implements BaAutorisationSortieService {
-    private static final DateTimeFormatter VALIDATION_DTF = DateTimeFormatter.ofPattern("dd/MM/yyyy 'a' HH'h'mm");
     private final YtMapper mapper = Mappers.getMapper(YtMapper.class);
 
     private final BaAutorisationSortieRepository autorisationSortieRepository;
@@ -52,6 +50,8 @@ public class BaAutorisationSortieServiceImpl implements BaAutorisationSortieServ
     private final BaServiceRepository serviceRepository;
     private final BaAgenceRepository agenceRepository;
     private final BaUserService userService;
+    private final RhCircuitService circuitService;
+    private final com.bakouan.app.service.CongePlanningService congePlanning;
 
     @Override
     public BaAutorisationSortieDto createDemande(final BaAutorisationSortieRequestDto request) {
@@ -64,11 +64,12 @@ public class BaAutorisationSortieServiceImpl implements BaAutorisationSortieServ
 
         String typeStructure = normalizeTypeStructure(request.getTypeStructure());
         BaUser demandeur = currentUserEntity();
+        userRepository.findLockedById(demandeur.getId()).orElseThrow();
+        congePlanning.guardOtherSubmission(demandeur,request.getDateSortie(),request.getDateSortie());
         BaDepartement direction = resolveDirection(request.getIdDirection(), demandeur);
         BaService service = resolveService(request.getIdService(), demandeur);
         BaAgence agence = resolveAgence(request.getIdAgence(), demandeur);
         validateStructureChoice(typeStructure, direction, service, agence);
-        BaUser superieur = resolveSuperieur(demandeur, typeStructure, direction, service, agence);
 
         BaAutorisationSortie entity = new BaAutorisationSortie();
         entity.setId(BaUtils.randomUUID());
@@ -79,9 +80,9 @@ public class BaAutorisationSortieServiceImpl implements BaAutorisationSortieServ
         entity.setService(service);
         entity.setAgence(agence);
         entity.setDemandeur(demandeur);
-        entity.setValidateur(superieur);
+        entity.setCircuit(circuitService.freezeFor("SORTIE",demandeur));
         entity.setStatutValidation(EAutorisationSortieStatut.EN_ATTENTE);
-        return mapper.maps(autorisationSortieRepository.save(entity));
+        return toDto(autorisationSortieRepository.save(entity));
     }
 
     @Override
@@ -89,7 +90,7 @@ public class BaAutorisationSortieServiceImpl implements BaAutorisationSortieServ
         BaUser current = currentUserEntity();
         return autorisationSortieRepository.findByDemandeurIdAndStatutOrderByCreatedDateDesc(current.getId(), EStatut.A)
                 .stream()
-                .map(mapper::maps)
+                .map(this::toDto)
                 .collect(Collectors.toList());
     }
 
@@ -99,37 +100,33 @@ public class BaAutorisationSortieServiceImpl implements BaAutorisationSortieServ
         return autorisationSortieRepository
                 .findByStatutAndStatutValidationOrderByCreatedDateDesc(EStatut.A, EAutorisationSortieStatut.EN_ATTENTE)
                 .stream()
-                .filter(demande -> canValidateDemande(current, demande))
-                .map(mapper::maps)
+                .filter(demande -> circuitService.canDecide(demande.getCircuit(), current))
+                .map(this::toDto)
                 .collect(Collectors.toList());
     }
 
     @Override
-    public BaAutorisationSortieDto validerDemande(final String id, final String commentaire) {
-        BaAutorisationSortie demande = getDemandeAValiderById(id);
-        BaUser validateur = currentUserEntity();
-        ZonedDateTime now = ZonedDateTime.now();
-        String commentaireValidation = BaUtils.isEmpty(commentaire)
-                ? "Valide par " + buildNomComplet(validateur) + " a la date " + now.format(VALIDATION_DTF)
-                : commentaire.trim();
-        demande.setStatutValidation(EAutorisationSortieStatut.VALIDEE);
-        demande.setCommentaireValidation(commentaireValidation);
-        demande.setDateValidation(now);
-        demande.setValidateur(validateur);
-        return mapper.maps(autorisationSortieRepository.save(demande));
+    public BaAutorisationSortieDto validerDemande(final String id, final int etape, final String commentaire) {
+        return decide(id, etape, true, commentaire);
     }
 
     @Override
-    public BaAutorisationSortieDto rejeterDemande(final String id, final String commentaire) {
-        if (BaUtils.isEmpty(commentaire)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le commentaire de rejet est obligatoire.");
-        }
+    public BaAutorisationSortieDto rejeterDemande(final String id, final int etape, final String commentaire) {
+        return decide(id, etape, false, commentaire);
+    }
+
+    private BaAutorisationSortieDto decide(String id, int etape, boolean approve, String comment) {
         BaAutorisationSortie demande = getDemandeAValiderById(id);
-        demande.setStatutValidation(EAutorisationSortieStatut.REJETEE);
-        demande.setCommentaireValidation(commentaire.trim());
-        demande.setDateValidation(ZonedDateTime.now());
-        demande.setValidateur(currentUserEntity());
-        return mapper.maps(autorisationSortieRepository.save(demande));
+        BaUser actor = currentUserEntity();
+        String status = circuitService.decide(demande.getCircuit(), actor, etape, approve, comment == null ? null : comment.trim());
+        if("VALIDEE".equals(status)){userRepository.findLockedById(demande.getDemandeur().getId()).orElseThrow();congePlanning.assertOtherFinal(demande.getDemandeur(),demande.getDateSortie(),demande.getDateSortie(),demande.getId());}
+        demande.setStatutValidation(EAutorisationSortieStatut.valueOf(status));
+        if (!"EN_ATTENTE".equals(status)) {
+            demande.setValidateur(actor);
+            demande.setDateValidation(ZonedDateTime.now());
+            demande.setCommentaireValidation(comment);
+        }
+        return toDto(autorisationSortieRepository.save(demande));
     }
 
     @Override
@@ -184,7 +181,8 @@ public class BaAutorisationSortieServiceImpl implements BaAutorisationSortieServ
         if (hasRole(current, "BA_ADMIN")) {
             return true;
         }
-        return sameUser(current, demande.getDemandeur()) || sameUser(current, demande.getValidateur()) || canValidateDemande(current, demande);
+        return sameUser(current, demande.getDemandeur()) || sameUser(current, demande.getValidateur())
+                || circuitService.participant(demande.getCircuit(), current);
     }
 
     private boolean matchesFilter(final BaAutorisationSortie demande, final BaRhDemandesFilterDto filter) {
@@ -260,55 +258,16 @@ public class BaAutorisationSortieServiceImpl implements BaAutorisationSortieServ
     }
 
     private BaAutorisationSortie getDemandeAValiderById(final String id) {
-        BaUser current = currentUserEntity();
-        BaAutorisationSortie demande = autorisationSortieRepository.findById(id)
+        BaAutorisationSortie demande = autorisationSortieRepository.findLockedById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Demande d'autorisation introuvable."));
 
         if (demande.getStatut() != EStatut.A) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Demande inactive.");
         }
         if (demande.getStatutValidation() != EAutorisationSortieStatut.EN_ATTENTE) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cette demande a deja ete traitee.");
-        }
-        if (!canValidateDemande(current, demande)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Vous n'etes pas autorise a traiter cette demande.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette demande a deja ete traitee.");
         }
         return demande;
-    }
-
-    private boolean canValidateDemande(final BaUser current, final BaAutorisationSortie demande) {
-        if (current == null || demande == null || demande.getDemandeur() == null) {
-            return false;
-        }
-        if (isDirecteurGeneral(current)) {
-            return true;
-        }
-
-        BaUser demandeur = demande.getDemandeur();
-        if (sameUser(current, demandeur)) {
-            return false;
-        }
-
-        EFonctionEmploye fonctionDemandeur = demandeur.getFonction();
-        if (fonctionDemandeur == null) {
-            return demande.getValidateur() != null && sameUser(current, demande.getValidateur());
-        }
-
-        switch (fonctionDemandeur) {
-            case DIRECTEUR:
-                return current.getFonction() == EFonctionEmploye.DIRECTEUR_GENERAL_ADJOINT
-                        || current.getFonction() == EFonctionEmploye.DIRECTEUR_GENERAL;
-            case CHEF_SERVICE:
-                if (current.getFonction() != EFonctionEmploye.DIRECTEUR || !sameDepartement(current, demandeur)) {
-                    return false;
-                }
-                return isDirectSuperior(current, demandeur) || demandeur.getSuperieur() == null;
-            case AGENT:
-                return isDirectSuperior(current, demandeur)
-                        || isSecondarySuperior(current, demandeur);
-            default:
-                return demande.getValidateur() != null && sameUser(current, demande.getValidateur());
-        }
     }
 
     private boolean sameUser(final BaUser left, final BaUser right) {
@@ -316,23 +275,6 @@ public class BaAutorisationSortieServiceImpl implements BaAutorisationSortieServ
                 && right != null
                 && left.getId() != null
                 && left.getId().equals(right.getId());
-    }
-
-    private boolean sameDepartement(final BaUser left, final BaUser right) {
-        return left != null
-                && right != null
-                && left.getDepartement() != null
-                && right.getDepartement() != null
-                && left.getDepartement().getId() != null
-                && left.getDepartement().getId().equals(right.getDepartement().getId());
-    }
-
-    private boolean isDirectSuperior(final BaUser candidate, final BaUser employe) {
-        return employe.getSuperieur() != null && sameUser(candidate, employe.getSuperieur());
-    }
-
-    private boolean isSecondarySuperior(final BaUser candidate, final BaUser employe) {
-        return employe.getSuperieurSecondaire() != null && sameUser(candidate, employe.getSuperieurSecondaire());
     }
 
     private String normalizeTypeStructure(final String typeStructure) {
@@ -385,70 +327,6 @@ public class BaAutorisationSortieServiceImpl implements BaAutorisationSortieServ
         }
     }
 
-    private BaUser resolveSuperieur(final BaUser demandeur,
-                                    final String typeStructure,
-                                    final BaDepartement direction,
-                                    final BaService service,
-                                    final BaAgence agence) {
-        EFonctionEmploye fonction = demandeur.getFonction();
-        if (fonction == EFonctionEmploye.DIRECTEUR_GENERAL) {
-            return null;
-        }
-        if (fonction == EFonctionEmploye.DIRECTEUR) {
-            return findFirstByFonctions(EFonctionEmploye.DIRECTEUR_GENERAL_ADJOINT, EFonctionEmploye.DIRECTEUR_GENERAL);
-        }
-        if (fonction == EFonctionEmploye.CHEF_SERVICE) {
-            if (direction == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La direction est obligatoire pour un chef de service.");
-            }
-            return findByFonctionAndDepartement(EFonctionEmploye.DIRECTEUR, direction);
-        }
-        if ("AGENCE".equals(typeStructure)) {
-            if (agence == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "L'agence est obligatoire.");
-            }
-            return findByFonctionAndAgence(EFonctionEmploye.CHEF_SERVICE, agence);
-        }
-        if (service == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le service est obligatoire pour determiner le superieur.");
-        }
-        return findByFonctionAndService(EFonctionEmploye.CHEF_SERVICE, service);
-    }
-
-    private BaUser findFirstByFonctions(final EFonctionEmploye... fonctions) {
-        for (EFonctionEmploye fonction : fonctions) {
-            List<BaUser> users = userRepository.findByFonctionAndStatut(fonction, EStatut.A);
-            if (users != null && !users.isEmpty()) {
-                return users.get(0);
-            }
-        }
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Aucun superieur hierarchique n'est defini.");
-    }
-
-    private BaUser findByFonctionAndDepartement(final EFonctionEmploye fonction, final BaDepartement departement) {
-        List<BaUser> users = userRepository.findByFonctionAndDepartementIdAndStatut(fonction, departement.getId(), EStatut.A);
-        if (users == null || users.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Aucun directeur de departement trouve.");
-        }
-        return users.get(0);
-    }
-
-    private BaUser findByFonctionAndService(final EFonctionEmploye fonction, final BaService service) {
-        List<BaUser> users = userRepository.findByFonctionAndServiceIdAndStatut(fonction, service.getId(), EStatut.A);
-        if (users == null || users.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Aucun chef de service trouve.");
-        }
-        return users.get(0);
-    }
-
-    private BaUser findByFonctionAndAgence(final EFonctionEmploye fonction, final BaAgence agence) {
-        List<BaUser> users = userRepository.findByFonctionAndAgenceIdAndStatut(fonction, agence.getId(), EStatut.A);
-        if (users == null || users.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Aucun chef d'agence trouve.");
-        }
-        return users.get(0);
-    }
-
     private BaUser currentUserEntity() {
         BaUserDto currentUser = userService.getUserInfoWithMoreDetails();
         if (currentUser == null || BaUtils.isEmpty(currentUser.getId())) {
@@ -458,22 +336,10 @@ public class BaAutorisationSortieServiceImpl implements BaAutorisationSortieServ
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Utilisateur connecte introuvable."));
     }
 
-    private boolean isDirecteurGeneral(final BaUser currentUserEntity) {
-        if (currentUserEntity != null && currentUserEntity.getFonction() == EFonctionEmploye.DIRECTEUR_GENERAL) {
-            return true;
-        }
-        BaUserDto current = userService.getUserInfoWithMoreDetails();
-        return current != null && current.getFonction() == EFonctionEmploye.DIRECTEUR_GENERAL;
-    }
-
-    private String buildNomComplet(final BaUser user) {
-        if (user == null) {
-            return "Superieur hierarchique";
-        }
-        String nom = user.getNom() == null ? "" : user.getNom().trim();
-        String prenom = user.getPrenom() == null ? "" : user.getPrenom().trim();
-        String full = (nom + " " + prenom).trim();
-        return full.isEmpty() ? "Superieur hierarchique" : full;
+    private BaAutorisationSortieDto toDto(BaAutorisationSortie demande) {
+        BaAutorisationSortieDto dto = mapper.maps(demande);
+        dto.setCircuit(circuitService.toDto(demande.getCircuit(), currentUserEntity()));
+        return dto;
     }
 
 }

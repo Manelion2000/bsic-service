@@ -19,11 +19,21 @@ public class ReportController {
 
     private final BaReportService reportService;
 
+    @GetMapping("/autorisations-absence/{id}")
+    public ResponseEntity<byte[]> reportAbsence(@PathVariable String id) {
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore())
+                .contentType(MediaType.APPLICATION_PDF).header("X-Content-Type-Options", "nosniff")
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename("autorisation-absence-" + id + ".pdf").build().toString())
+                .body(reportService.printAutorisationAbsence(id));
+    }
+
     @GetMapping(value = BaConstants.URL.HABILITATION + BaConstants.URL.FICHE_HABILITATION + "/{id}")
     public ResponseEntity<byte[]> reportFicheHabilitation(@PathVariable("id") String id) {
         byte[] data = reportService.printFicheHabilitation(id);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setCacheControl("no-store");
+        headers.set("X-Content-Type-Options", "nosniff");
         headers.setContentDisposition(ContentDisposition.attachment()
                 .filename("fiche-habilitation-" + id + ".pdf")
                 .build());
@@ -35,6 +45,8 @@ public class ReportController {
         byte[] data = reportService.printAutorisationSortie(id);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setCacheControl("no-store");
+        headers.set("X-Content-Type-Options", "nosniff");
         headers.setContentDisposition(ContentDisposition.attachment()
                 .filename("autorisation-sortie-" + id + ".pdf")
                 .build());
@@ -46,6 +58,8 @@ public class ReportController {
         byte[] data = reportService.printAttestationRepriseService(id);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setCacheControl("no-store");
+        headers.set("X-Content-Type-Options", "nosniff");
         headers.setContentDisposition(ContentDisposition.attachment()
                 .filename("attestation-reprise-service-" + id + ".pdf")
                 .build());

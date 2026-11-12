@@ -41,4 +41,25 @@ public class BaPlateforme extends BaAbstractAuditingEntity {
     @ManyToOne
     @JoinColumn(name = "circuit_id")
     private BaCircuit circuit;
+
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name="fiche", columnDefinition="jsonb", nullable=false)
+    private PlateformeFiche fiche = PlateformeFiche.vide();
+
+    @ManyToOne(fetch=jakarta.persistence.FetchType.LAZY)
+    @JoinColumn(name="departement_proprietaire_id")
+    private BaDepartement departementProprietaire;
+
+    @ManyToOne(fetch=jakarta.persistence.FetchType.LAZY)
+    @JoinColumn(name="responsable_metier_id")
+    private BaUser responsableMetier;
+
+    @ManyToOne(fetch=jakarta.persistence.FetchType.LAZY)
+    @JoinColumn(name="responsable_technique_id")
+    private BaUser responsableTechnique;
+
+    @jakarta.persistence.ManyToMany
+    @jakarta.persistence.JoinTable(name="ba_plateforme_dependance",
+        joinColumns=@JoinColumn(name="plateforme_id"), inverseJoinColumns=@JoinColumn(name="dependance_id"))
+    private java.util.Set<BaPlateforme> dependances = new java.util.LinkedHashSet<>();
 }

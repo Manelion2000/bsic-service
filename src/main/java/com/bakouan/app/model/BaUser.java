@@ -29,6 +29,8 @@ import com.bakouan.app.model.BaAgence;
  * @since : 14/05/2021 à 12:18
  */
 @Entity
+// Une modification de profil ou de rôle ne doit pas réécrire un ancien état d'accès.
+@org.hibernate.annotations.DynamicUpdate
 @Getter
 @Setter
 @NoArgsConstructor
@@ -46,7 +48,13 @@ public class BaUser extends BaAbstractAuditingEntity {
 
     @NotNull
     @Column(name = "password_hash", length = 254)
+    @JsonIgnore
     private String password;
+
+    @Column(nullable=false) @JsonIgnore private long credentialVersion;
+    @Column(nullable=false) private boolean passwordChangeRequired;
+    @Column(nullable=false) @JsonIgnore private boolean temporaryPasswordUsed;
+    @JsonIgnore private java.time.Instant temporaryPasswordExpiresAt;
 
     @Size(max = 50)
     @Column(name = "nom", length = 50)
@@ -159,10 +167,9 @@ public class BaUser extends BaAbstractAuditingEntity {
     @Override
     public String toString() {
         return "User{id='" + id + "', username='"
-                + username + "', password='" + password
+                + username
                 + ", nom=''" + nom + "', prenom='" + prenom
-                + "', email='" + email + "', locked=" + locked + "', resetKey='"
-                + resetKey + "', resetDate=" + resetDate + ", telephone='"
+                + "', email='" + email + "', locked=" + locked + ", telephone='"
                 + telephone + ", profil=" + profil + "}";
     }
 

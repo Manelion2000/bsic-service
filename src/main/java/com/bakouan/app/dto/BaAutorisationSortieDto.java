@@ -8,6 +8,7 @@ import java.time.ZonedDateTime;
 
 @Data
 public class BaAutorisationSortieDto {
+    private RhCircuitDto circuit;
     private String id;
     private String motif;
     private LocalDate dateSortie;

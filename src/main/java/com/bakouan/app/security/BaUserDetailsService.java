@@ -1,173 +1,82 @@
 package com.bakouan.app.security;
 
-
 import com.bakouan.app.enums.EStatut;
-import com.bakouan.app.mapper.YtMapper;
+import com.bakouan.app.model.BaRole;
 import com.bakouan.app.model.BaUser;
 import com.bakouan.app.repositories.BaUserRepository;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.mapstruct.factory.Mappers;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.ZonedDateTime;
-import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import java.time.Instant;
+import java.util.List;
 
-/**
- * Pour intercepter l'authenticvation des utilisateurs afin d'authentifier.
- *
- * @author : <A HREF="mailto:lankoande.yabo.dev@gmail.com">Yienouyaba LANKOANDE (YaboLANK)</A>
- * @version : 1.0
- * Copyright (c) 2021 All rights reserved.
- * @since : 14/05/2021 à 12:18
- */
-@Component()
-@Slf4j
+@Service
 @RequiredArgsConstructor
 public class BaUserDetailsService implements UserDetailsService {
 
     private final BaUserRepository userRepository;
+    @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager entityManager;
 
-    private final IUserDetailsFacade udf;
-
-    private final YtMapper mapper = Mappers.getMapper(YtMapper.class);
-    private final LoginAttemptService loginAttemptService;
-    private final HttpServletRequest request;
-
-    /**
-     * Timeout ou delai d'attente avant de débloquer un compte qui avait
-     * été bloqué pour cause de multiples tentatives.
-     * En nombre de minutes.
-     */
-    @Value("${app.security.attempts.timeout:5}")
-    private Integer attemptTimeout;
-
-    /**
-     * Nombre de tentatives autorisées.
-     */
-    @Value("${app.security.attempts.max:5}")
-    private Integer maxAttempt;
-
-    /**
-     * Authentication en surchargeant la methode loadUserByUsername.
-     *
-     * @return les détails de l'utilisateur
-     */
+    /** Charge le compte sans enregistrer une connexion ni modifier les tentatives. */
     @Override
-    @Transactional
+    @Transactional(readOnly = true)
     public UserDetails loadUserByUsername(final String username) {
+        BaUser user = getOneByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException("Les informations de connexion sont invalides."));
+        var authorities = (user.getRoles() == null ? Stream.<BaRole>empty() : user.getRoles().stream())
+                .filter(role -> role != null && role.getCode() != null && !role.getCode().isBlank())
+                .map(role -> new SimpleGrantedAuthority(role.getCode().trim()))
+                .distinct()
+                .toList();
 
-        final String ip = getClientIP();
-
-        if (loginAttemptService.isBlocked(ip)) {
-            log.debug("Utilisateur blocké : {}", ip);
-            final int maxTentatives = maxAttempt;
-            log.warn("Utilisateur blocké suite à {} tentatives de connexion. Clé : {}", maxAttempt, ip);
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Votre poste a été blocké suite à "
-                            + maxTentatives
-                            + " tentatives de connexion. "
-                            + "Reessayez plus tard s'il vous plaît.");
-        } else {
-            log.debug("Utilisateur non blocké : {}", ip);
-        }
-
-        log.debug("Loading user details from username : {}", username);
-
-        try {
-            Optional<BaUser> userFromDatabase = this.userRepository
-                    .findOneByUsernameIgnoreCaseAndStatut(username, EStatut.A);
-            return userFromDatabase.map(user -> {
-                List<GrantedAuthority> ga = (user.getRoles() == null ? java.util.stream.Stream.<com.bakouan.app.model.BaRole>empty() : user.getRoles().stream())
-                        .filter(role -> role != null && role.getCode() != null)
-                        .map(role -> (GrantedAuthority) new SimpleGrantedAuthority(role.getCode()))
-                        .distinct()
-                        .collect(Collectors.toList());
-
-                if (!Boolean.TRUE.equals(user.getActivated())) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Votre compte n'a pas été activé.");
-                }
-
-                if (Boolean.TRUE.equals(user.getLocked())) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Votre compte a été bloqué. Merci "
-                            + "de contacter l'administrateur.");
-                }
-
-                loginAttemptService.loginSucceeded(ip);
-
-                user.setLastConnexionDate(ZonedDateTime.now());
-
-                return new BaUserDetailsProd(user.getUsername().toLowerCase(), user.getPassword(), ga)
-                        .getUserDetails();
-
-
-            }).orElseThrow(() -> new UsernameNotFoundException("L'utilisateur " + username + " n'existe pas."));
-        } catch (Exception e) {
-            log.error("Erreur d'authentification", e);
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Les informations de connexion sont invalides");
-        }
+        return new CredentialUserDetails(user.getUsername().toLowerCase(Locale.ROOT),user.getPassword(),
+                Boolean.TRUE.equals(user.getActivated()),!Boolean.TRUE.equals(user.getLocked()),authorities,
+                user.getCredentialVersion(),user.isPasswordChangeRequired(),user.isTemporaryPasswordUsed());
     }
 
-    /**
-     * Vérifier la validité d'un compte.
-     * Si le compte n'est pas bloqué, actif, etc.
-     *
-     * @param username
-     */
-    public void checkValiditeCompte(final String username) {
-        Optional<BaUser> userFromDatabase = this.userRepository
-                .findOneByUsernameIgnoreCaseAndStatut(username, EStatut.A);
-        userFromDatabase.map(user -> {
-            if (!Boolean.TRUE.equals(user.getActivated())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Votre compte n'a pas été activé.");
-            }
-
-            if (Boolean.TRUE.equals(user.getLocked())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Votre compte a été bloqué. Merci "
-                        + "de contacter l'administrateur.");
-            }
-            return user;
-        }).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "Le compte " + username + " est introuvable."));
+    @Transactional
+    public Authentication completeAuthentication(Authentication authentication) {
+        var user=userRepository.findLockedByUsername(authentication.getName(),EStatut.A)
+                .orElseThrow(()->new BadCredentialsException("Connexion invalide."));
+        if(entityManager!=null)entityManager.refresh(user,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        long version=authentication.getPrincipal() instanceof CredentialUserDetails details?details.getCredentialVersion():0;
+        if(version!=user.getCredentialVersion()||!Boolean.TRUE.equals(user.getActivated())||Boolean.TRUE.equals(user.getLocked()))
+            throw new BadCredentialsException("Connexion invalide.");
+        boolean setup=user.isPasswordChangeRequired();
+        if(setup&&(user.isTemporaryPasswordUsed()||user.getTemporaryPasswordExpiresAt()==null||!user.getTemporaryPasswordExpiresAt().isAfter(Instant.now())))
+            throw new BadCredentialsException("Connexion invalide.");
+        if(setup)user.setTemporaryPasswordUsed(true);
+        user.setLastConnexionDate(ZonedDateTime.now());userRepository.saveAndFlush(user);
+        var result=new UsernamePasswordAuthenticationToken(authentication.getPrincipal(),null,
+                setup?List.of(new SimpleGrantedAuthority("PASSWORD_SETUP_ONLY")):authentication.getAuthorities());
+        result.setDetails(new CredentialSession(user.getCredentialVersion(),setup));result.eraseCredentials();return result;
     }
 
-
-    /**
-     * Récupérer l'adresse IP de l'utilisateur connecté.
-     *
-     * @return L'adresse IP
-     */
-    private String getClientIP() {
-        final String xfHeader = request.getHeader("X-Forwarded-For");
-        if (xfHeader == null) {
-            return request.getRemoteAddr() + request.getRemotePort();
-        }
-        return xfHeader.split(",")[0];
+    @Transactional
+    public void recordSuccessfulLogin(final String username) {
+        BaUser user = getOneByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException("Utilisateur introuvable."));
+        user.setLastConnexionDate(ZonedDateTime.now());
     }
 
-
-    /**
-     * Recupere un utilisateur par son nom d'utilisateur.
-     *
-     * @param username
-     * @return un optional de l'utilisateur
-     */
+    @Transactional(readOnly = true)
     public Optional<BaUser> getOneByUsername(final String username) {
-        return this.userRepository
-                .findOneByUsernameIgnoreCaseAndStatut(username, EStatut.A);
+        if (username == null || username.isBlank()) {
+            return Optional.empty();
+        }
+        return userRepository.findOneByUsernameIgnoreCaseAndStatut(username.trim(), EStatut.A);
     }
-
-
 }

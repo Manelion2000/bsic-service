@@ -19,6 +19,10 @@ public class BaJWTTokenDto {
 
     private long expiresIn;
 
+    private boolean passwordChangeRequired;
+
+    public BaJWTTokenDto(Instant date,String token,long expiresIn){this(date,token,expiresIn,false);}
+
     /**
      * Fonction de récupération du token.
      *

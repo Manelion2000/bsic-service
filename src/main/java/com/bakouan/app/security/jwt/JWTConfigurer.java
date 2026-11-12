@@ -1,6 +1,7 @@
 package com.bakouan.app.security.jwt;
 
 import com.bakouan.app.security.BaUserDetailsService;
+import com.bakouan.app.security.BaSecurityErrorHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -21,6 +22,7 @@ public class JWTConfigurer extends SecurityConfigurerAdapter<DefaultSecurityFilt
 
     private final BaUserDetailsService userDetailsService;
     private final RevokedTokenService revokedTokenService;
+    private final BaSecurityErrorHandler securityErrorHandler;
 
     /**
      * Fonction de configuration.
@@ -29,7 +31,7 @@ public class JWTConfigurer extends SecurityConfigurerAdapter<DefaultSecurityFilt
      */
     @Override
     public void configure(final HttpSecurity http) {
-        http.addFilterBefore(new JWTFilter(tokenProvider, userDetailsService, revokedTokenService),
+        http.addFilterBefore(new JWTFilter(tokenProvider, userDetailsService, revokedTokenService, securityErrorHandler),
                 UsernamePasswordAuthenticationFilter.class);
     }
 }

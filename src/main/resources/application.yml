@@ -5,6 +5,18 @@ spring:
     active: prod
   application:
     name: BsicService
+  data:
+    rest:
+      # Eviter que les repositories contournent les controles des services metier.
+      detection-strategy: annotated
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: "1.20"
+    baseline-description: "Schema BSIC existant avant Flyway"
+    validate-on-migrate: true
+    out-of-order: false
   # Configuration du service mail
   mail:
     host: mailer.gov.bf
@@ -20,9 +32,27 @@ spring:
 
 # Configuration personnalisée
 app:
+  conges:
+    # Aucune politique ou calendrier n'est active par cette configuration.
+    traitements-automatiques-enabled: ${BSIC_CONGES_TRAITEMENTS_ENABLED:false}
+    notifications-mail-enabled: ${BSIC_CONGES_MAIL_ENABLED:false}
+    fuseau-traitements: ${BSIC_CONGES_FUSEAU:Africa/Ouagadougou}
+    acquisition-cron: "0 5 0 * * *"
+    notifications-delai-ms: 60000
+  rh:
+    validation:
+      # Configuration serveur : le demandeur ne peut pas modifier ces choix.
+      dg-enabled: ${BSIC_RH_DG_ENABLED:false}
+      refusal-policy: ${BSIC_RH_REFUSAL_POLICY:NON_CONFIGURE}
+  features:
+    habilitations-enabled: false
   storage:
     path: ./datas
   security:
+    jwt:
+      base64-secret: ${BSIC_JWT_SECRET:}
+    # Adresses exactes des proxies autorises a fournir X-Forwarded-For.
+    trusted-proxies: ${BSIC_TRUSTED_PROXIES:}
     attempts:
       # En nombre de minutes
       timeout: 5

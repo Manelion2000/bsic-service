@@ -34,6 +34,6 @@ public class BaLog extends BaAbstractAuditingEntity {
     @Column(name = "sujet")
     private String sujet;
 
-    @Column(name = "details")
+    @Column(name = "details", columnDefinition = "text")
     private String details;
 }

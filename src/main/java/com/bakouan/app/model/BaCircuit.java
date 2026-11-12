@@ -41,6 +41,17 @@ public class BaCircuit extends BaAbstractAuditingEntity {
     @Column(name = "actif")
     private Boolean actif = true;
 
+    @jakarta.persistence.Version
+    @Column(nullable = false)
+    private long lockVersion;
+
+    @Column(nullable = false)
+    private boolean autonome;
+
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private com.bakouan.app.dto.ProcessusDtos.Definition definition;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "statu")
     private ECircuitStatut statu = ECircuitStatut.EN_CONFIGURATION;

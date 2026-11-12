@@ -23,11 +23,13 @@ public class BaUpdatePasswordDto implements Serializable {
 
   private String idUser;
 
+  @lombok.ToString.Exclude
   private String ancien;
 
-  @NotEmpty(message = "Le nouveau mot de passe est obligatoire")
+  @lombok.ToString.Exclude
   private String nouveau;
 
+  @lombok.ToString.Exclude
   private String confirmer;
 
   // Les champs suivants sont utilisés
@@ -40,6 +42,7 @@ public class BaUpdatePasswordDto implements Serializable {
   @Email(message = "Le format de l'email est incorrect")
   private String email;
 
+  @lombok.ToString.Exclude
   private String resetKey;
 
 }

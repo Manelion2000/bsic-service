@@ -9,6 +9,7 @@ public class BaPublicAnnuaireAgentDto {
     private String fonction;
     private String email;
     private String numeroPoste;
+    private String telephone;
     private String idService;
     private String nomService;
     private String idAgence;

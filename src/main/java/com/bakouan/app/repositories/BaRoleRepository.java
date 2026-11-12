@@ -14,5 +14,11 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface BaRoleRepository extends JpaRepository<BaRole, String> {
 
+    java.util.Optional<BaRole> findByCodeAndStatut(String code, com.bakouan.app.enums.EStatut statut);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select r from BaRole r where r.code = :code")
+    java.util.Optional<BaRole> findLockedByCode(@org.springframework.data.repository.query.Param("code") String code);
+
 
 }

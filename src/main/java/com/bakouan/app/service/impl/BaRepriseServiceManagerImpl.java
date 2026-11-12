@@ -7,7 +7,6 @@ import com.bakouan.app.dto.BaRhDemandesFilterDto;
 import com.bakouan.app.dto.BaRhDemandesStatsDto;
 import com.bakouan.app.dto.BaStatItemDto;
 import com.bakouan.app.dto.BaUserDto;
-import com.bakouan.app.enums.EFonctionEmploye;
 import com.bakouan.app.enums.ERepriseServiceStatut;
 import com.bakouan.app.enums.EStatut;
 import com.bakouan.app.mapper.YtMapper;
@@ -17,6 +16,7 @@ import com.bakouan.app.repositories.BaRepriseServiceRepository;
 import com.bakouan.app.repositories.BaUserRepository;
 import com.bakouan.app.security.BaUserService;
 import com.bakouan.app.service.BaRepriseServiceManager;
+import com.bakouan.app.service.RhValidationPolicy;
 import com.bakouan.app.utils.BaUtils;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +41,8 @@ public class BaRepriseServiceManagerImpl implements BaRepriseServiceManager {
     private final BaRepriseServiceRepository repriseServiceRepository;
     private final BaUserRepository userRepository;
     private final BaUserService userService;
+    private final RhValidationPolicy validationPolicy;
+    private final com.bakouan.app.service.SignatureService signatures;
 
     @Override
     public BaRepriseServiceDto createDemande(final BaRepriseServiceRequestDto request) {
@@ -77,7 +79,7 @@ public class BaRepriseServiceManagerImpl implements BaRepriseServiceManager {
         return repriseServiceRepository
                 .findByStatutAndStatutValidationOrderByCreatedDateDesc(EStatut.A, ERepriseServiceStatut.EN_ATTENTE)
                 .stream()
-                .filter(demande -> canValidate(current, demande.getDemandeur()))
+                .filter(demande -> validationPolicy.canValidate(current, demande.getDemandeur()))
                 .map(mapper::maps)
                 .collect(Collectors.toList());
     }
@@ -87,7 +89,7 @@ public class BaRepriseServiceManagerImpl implements BaRepriseServiceManager {
         BaRepriseService demande = findById(id);
         BaUser current = currentUserEntity();
         boolean peutConsulterCommeValidateur = demande.getStatutValidation() == ERepriseServiceStatut.EN_ATTENTE
-                && canValidate(current, demande.getDemandeur());
+                && validationPolicy.canValidate(current, demande.getDemandeur());
         if (!sameUser(current, demande.getDemandeur())
                 && !sameUser(current, demande.getSignataire())
                 && !peutConsulterCommeValidateur) {
@@ -103,6 +105,7 @@ public class BaRepriseServiceManagerImpl implements BaRepriseServiceManager {
         demande.setStatutValidation(ERepriseServiceStatut.VALIDEE);
         demande.setCommentaireValidation(BaUtils.isEmpty(commentaire) ? null : commentaire.trim());
         demande.setDateValidation(ZonedDateTime.now());
+        signatures.capture("REPRISE", demande.getId(), 0, demande.getSignataire(), demande.getDateValidation().toInstant());
         return mapper.maps(repriseServiceRepository.save(demande));
     }
 
@@ -171,7 +174,7 @@ public class BaRepriseServiceManagerImpl implements BaRepriseServiceManager {
         }
         return sameUser(current, demande.getDemandeur())
                 || sameUser(current, demande.getSignataire())
-                || canValidate(current, demande.getDemandeur());
+                || validationPolicy.canValidate(current, demande.getDemandeur());
     }
 
     private boolean matchesFilter(final BaRepriseService demande, final BaRhDemandesFilterDto filter) {
@@ -260,9 +263,8 @@ public class BaRepriseServiceManagerImpl implements BaRepriseServiceManager {
     }
 
     private List<BaUser> resolveValidateurs(final BaUser demandeur) {
-        List<BaUser> validateurs = userRepository.findByStatut(EStatut.A).stream()
-                .filter(validateur -> canValidate(validateur, demandeur))
-                .collect(Collectors.toList());
+        List<BaUser> validateurs = validationPolicy.eligibleValidators(
+                demandeur, userRepository.findByStatut(EStatut.A));
         if (validateurs.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Aucun validateur hierarchique n'est defini pour cet utilisateur.");
@@ -270,44 +272,13 @@ public class BaRepriseServiceManagerImpl implements BaRepriseServiceManager {
         return validateurs;
     }
 
-    private boolean canValidate(final BaUser validateur, final BaUser demandeur) {
-        if (validateur == null || demandeur == null || sameUser(validateur, demandeur)
-                || validateur.getFonction() == null || demandeur.getFonction() == null) {
-            return false;
-        }
-        return switch (demandeur.getFonction()) {
-            case AGENT -> (validateur.getFonction() == EFonctionEmploye.CHEF_SERVICE
-                    && sameStructure(validateur.getService(), demandeur.getService()))
-                    || (validateur.getFonction() == EFonctionEmploye.DIRECTEUR
-                    && sameStructure(validateur.getDepartement(), demandeur.getDepartement()));
-            case CHEF_SERVICE -> validateur.getFonction() == EFonctionEmploye.DIRECTEUR
-                    && sameStructure(validateur.getDepartement(), demandeur.getDepartement());
-            case DIRECTEUR -> validateur.getFonction() == EFonctionEmploye.DIRECTEUR_GENERAL
-                    || validateur.getFonction() == EFonctionEmploye.DIRECTEUR_GENERAL_ADJOINT;
-            case DIRECTEUR_GENERAL_ADJOINT -> validateur.getFonction() == EFonctionEmploye.DIRECTEUR_GENERAL
-                    || validateur.getFonction() == EFonctionEmploye.DIRECTEUR_GENERAL_ADJOINT;
-            case DIRECTEUR_GENERAL -> validateur.getFonction() == EFonctionEmploye.DIRECTEUR_GENERAL_ADJOINT;
-        };
-    }
-
-    private boolean sameStructure(final Object left, final Object right) {
-        if (left instanceof com.bakouan.app.model.BaService leftService
-                && right instanceof com.bakouan.app.model.BaService rightService) {
-            return leftService.getId() != null && leftService.getId().equals(rightService.getId());
-        }
-        if (left instanceof com.bakouan.app.model.BaDepartement leftDepartement
-                && right instanceof com.bakouan.app.model.BaDepartement rightDepartement) {
-            return leftDepartement.getId() != null && leftDepartement.getId().equals(rightDepartement.getId());
-        }
-        return false;
-    }
-
     private BaRepriseService getPendingDemandeForCurrentSignataire(final String id) {
-        BaRepriseService demande = findById(id);
+        BaRepriseService demande = repriseServiceRepository.findLockedById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Demande de reprise introuvable."));
         if (demande.getStatut() != EStatut.A || demande.getStatutValidation() != ERepriseServiceStatut.EN_ATTENTE) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cette demande a deja ete traitee ou est inactive.");
         }
-        if (!canValidate(currentUserEntity(), demande.getDemandeur())) {
+        if (!validationPolicy.canValidate(currentUserEntity(), demande.getDemandeur())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Vous n'etes pas autorise a traiter cette demande.");
         }
         return demande;

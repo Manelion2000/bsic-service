@@ -19,17 +19,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.mapstruct.factory.Mappers;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.ZonedDateTime;
+import java.security.SecureRandom;
+import java.util.Base64;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -43,7 +42,6 @@ import java.util.stream.Collectors;
 public class BaUserService {
 
     private final IUserDetailsFacade userDetailsFacade;
-    private final UserDetailsService userDetailsService;
     private final BaUserRepository userRepository;
     private final BaProfilRepository profilRepository;
     private final BaRoleRepository roleRepository;
@@ -54,6 +52,9 @@ public class BaUserService {
     private final PasswordEncoder passwordEncoder;
     private final BaLogService logService;
     private final BaMailService mailService;
+    private final AccountCredentialService credentialService;
+    @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager entityManager;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
 
     /**
@@ -104,6 +105,7 @@ public class BaUserService {
 //            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vous devez fournir le mot de passe");
 //        }
 
+        validatePrivilegeAssignment(currentUser, new BaUser(), uDto);
         BaUser user = this.mapper.maps(uDto);
         if (!BaUtils.isEmpty(uDto.getEmailPro())) {
             user.setEmailPro(uDto.getEmailPro());
@@ -112,18 +114,12 @@ public class BaUserService {
         hydrateUserRelations(user, uDto);
         validateHierarchyRules(user);
         validateUserManagementScope(currentUser, user);
-        String userPassword="1234";
-        user.setPassword(this.passwordEncoder.encode(userPassword));
-        user.setResetKey(null);
-        user.setResetDate(null);
+        String userPassword=credentialService.prepareTemporary(user);
         user.setActivated(Boolean.TRUE);
-
-
-        BaUser save = this.userRepository.save(user);
-
-        mailService.sendMessage(user.getEmail(), user.getNom() + " " + user.getPrenom(), "Merci " +
-                " d'être immatriculé. Votre code est : "+userPassword,"Identifiant  de connexion");
-        return this.mapper.maps(save);
+        validateUniqueDg(user);
+        BaUser save=this.userRepository.saveAndFlush(user);
+        BaUserDto result=this.mapper.maps(save);result.setInitialCredential(credentialService.receipt(save,userPassword));
+        return result;
     }
 
 
@@ -142,17 +138,13 @@ public class BaUserService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "L'utilisateur est introuvable");
         }
 
-        this.userRepository.findById(id)
-                .ifPresent(u -> {
-                    if (EStatut.D.equals(u.getStatut())) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "L'utilisateur est introuvable");
-                    }
-                    uDto.setPassword(u.getPassword());
-                    uDto.setActivated(u.getActivated());
-                    uDto.setResetDate(u.getResetDate());
-                    uDto.setResetKey(u.getResetKey());
-                    uDto.setLocked(u.getLocked());
-                });
+        BaUser original=this.userRepository.findLockedById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.BAD_REQUEST,"L’utilisateur est introuvable"));
+        if(entityManager!=null)entityManager.refresh(original,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        if(original.getStatut()==EStatut.D)throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"L’utilisateur est introuvable");
+        validatePrivilegeAssignment(currentUser,original,uDto);
+        if(!isAdministrator(currentUser)){uDto.setRoles(original.getRoles().stream().map(mapper::maps).collect(java.util.stream.Collectors.toSet()));uDto.setIdProfil(original.getProfil()==null?null:original.getProfil().getId());}
+        uDto.setPassword(original.getPassword());uDto.setActivated(original.getActivated());uDto.setLocked(original.getLocked());
+        uDto.setResetKey(original.getResetKey());uDto.setResetDate(original.getResetDate());
 
         if (this.userRepository.checkDuplicateTelephone(id, uDto.getTelephone())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le numéro de téléphone est déjà utilisé.");
@@ -171,13 +163,16 @@ public class BaUserService {
 
         uDto.setId(id);
         BaUser user = this.mapper.maps(uDto);
-        user.setId(id);
+        user.setId(id);user.setVersion(original.getVersion());user.setCredentialVersion(original.getCredentialVersion());
+        user.setPasswordChangeRequired(original.isPasswordChangeRequired());user.setTemporaryPasswordUsed(original.isTemporaryPasswordUsed());
+        user.setTemporaryPasswordExpiresAt(original.getTemporaryPasswordExpiresAt());
         if (!BaUtils.isEmpty(uDto.getEmailPro())) {
             user.setEmailPro(uDto.getEmailPro());
         }
         hydrateUserRelations(user, uDto);
         validateHierarchyRules(user);
         validateUserManagementScope(currentUser, user);
+        validateUniqueDg(user);
         user = this.userRepository.save(user);
         this.mapper.maps(user);
     }
@@ -211,27 +206,7 @@ public class BaUserService {
      *
      * @param pwDto DTO du mise à jour du mot de passe
      */
-    public void changePassword(final BaUpdatePasswordDto pwDto) {
-        log.info("Changement d'identifiant de connexion.");
-        logService.log(new BaLogDto(EAction.U, "Reinitialise le mot de passe"));
-
-        // À partir de là, on est sur de l'existence de l'élément,
-        // donc inutile d'utiliser un optional, encore.
-        final BaUser ylUser = this.userRepository.findOneByUsernameIgnoreCaseAndStatut(
-                        userDetailsFacade.getUserDetails().getUsername(), EStatut.A)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST, "L'utilisateur est introuvable"));
-        if (!Objects.equals(pwDto.getConfirmer(), pwDto.getNouveau())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "La confirmation ne correspond pas au mot de passe.");
-        }
-        final boolean matches = this.passwordEncoder.matches(pwDto.getAncien(), ylUser.getPassword());
-        if (!matches) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Votre ancien mot de passe est incorrect");
-        }
-        ylUser.setPassword(this.passwordEncoder.encode(pwDto.getNouveau()));
-        this.userRepository.save(ylUser);
-    }
+    public void changePassword(final BaUpdatePasswordDto pwDto) {credentialService.change(pwDto);}
 
 
     /**
@@ -255,7 +230,9 @@ public class BaUserService {
      */
     public BaUserDto getUserInfoWithMoreDetails() {
         Optional<BaUserDto> ou = this.getCurrentUser();
-        return ou.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Utilisateur non connecté."));
+        var dto=ou.orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Utilisateur non connecté."));
+        dto.setCanResetUserAccess(getCurrentUserEntity().map(credentialService::canResetAccess).orElse(false));
+        return dto;
     }
 
     /**
@@ -284,6 +261,7 @@ public class BaUserService {
      * @return BaRoleDto
      */
     public BaRoleDto addRole(final BaRoleDto roleDto) {
+        requireAdministrator();
         logService.log(new BaLogDto(EAction.C, "Roles : " + roleDto.getLibelle()));
         BaRole role = mapper.maps(roleDto);
         if (BaUtils.isEmpty(role.getId())) {
@@ -300,6 +278,7 @@ public class BaUserService {
      * @return Le role mis à jour
      */
     public BaRoleDto updateRole(final BaRoleDto pDto) {
+        requireAdministrator();
         logService.log(new BaLogDto(EAction.U, "Roles : " + pDto.getLibelle()));
 
         BaRole role;
@@ -315,20 +294,17 @@ public class BaUserService {
     }
 
     public BaUserDto addRoleToUser(String userId, String roleId) {
-        BaUser currentUser = requireUserManager();
-        BaUser user = userRepository.findById(userId)
+        BaUser currentUser = requireAdministrator();
+        BaUser user = userRepository.findLockedById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Utilisateur introuvable avec l'ID : " + userId));
         validateUserManagementScope(currentUser, user);
 
         BaRole role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rôle introuvable avec l'ID : " + roleId));
 
-        // Vérifier si le rôle est déjà associé à l'utilisateur
-        if (user.getRoles().contains(role)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Le rôle est déjà associé à cet utilisateur"
-            );
-        }
+        // Comparer les identifiants pour prendre en charge les proxys Hibernate.
+        // Le verrou sérialise les ajouts/retraits et une relance reste sans effet supplémentaire.
+        if (user.getRoles().stream().anyMatch(assigned -> Objects.equals(assigned.getId(), roleId))) return mapper.maps(user);
 
         // Ajouter le rôle à l'utilisateur
         user.getRoles().add(role);
@@ -340,23 +316,14 @@ public class BaUserService {
     }
 
     public BaUserDto removeRoleFromUser(String userId, String roleId) {
-        BaUser currentUser = requireUserManager();
-        BaUser user = userRepository.findById(userId)
+        BaUser currentUser = requireAdministrator();
+        BaUser user = userRepository.findLockedById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Utilisateur introuvable avec l'ID : " + userId));
         validateUserManagementScope(currentUser, user);
 
-        BaRole role = roleRepository.findById(roleId)
+        roleRepository.findById(roleId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rôle introuvable avec l'ID : " + roleId));
-
-        // Vérifier si le rôle est associé à l'utilisateur
-        if (!user.getRoles().contains(role)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Le rôle n'est pas associé à cet utilisateur"
-            );
-        }
-
-        // Supprimer le rôle de l'utilisateur
-        user.getRoles().remove(role);
+        if (!user.getRoles().removeIf(assigned -> Objects.equals(assigned.getId(), roleId))) return mapper.maps(user);
         userRepository.save(user);
         
         logService.log(new BaLogDto(EAction.U, "Suppression rôle de l'utilisateur : " + userId + " - " + roleId));
@@ -391,6 +358,7 @@ public class BaUserService {
      * @return ProfilDto
      */
     public BaProfilDto addProfil(final BaProfilDto profilDto) {
+        requireAdministrator();
         profilDto.setId(BaUtils.randomUUID());
         logService.log(new BaLogDto(EAction.C, "Profils" + profilDto.getLibelle()));
 
@@ -405,6 +373,7 @@ public class BaUserService {
      * @return ProfilDto: Le profil mis à jour
      */
     public BaProfilDto updateProfil(final BaProfilDto pDto) {
+        requireAdministrator();
         log.info("Met à jour le profil " + pDto.getLibelle());
         logService.log(new BaLogDto(EAction.U, "Profils" + pDto.getLibelle()));
 
@@ -429,6 +398,7 @@ public class BaUserService {
      * @param uuid : Le profil à supprimer
      */
     public void deleteProfil(final String uuid) {
+        requireAdministrator();
         log.warn("Suppression du profil : {}", uuid);
         logService.log(new BaLogDto(EAction.D, "Profils" + uuid));
 
@@ -447,6 +417,7 @@ public class BaUserService {
      * @param uuid : Le role à supprimer
      */
     public void deleteRole(final String uuid) {
+        requireAdministrator();
         log.info("Suppression du role : {}", uuid);
         logService.log(new BaLogDto(EAction.D, "Roles" + uuid));
 
@@ -507,6 +478,12 @@ public class BaUserService {
         });
     }
 
+    private void validatePrivilegeAssignment(BaUser actor,BaUser target,BaUserDto input) {
+        if(isAdministrator(actor))return;
+        var requested=input.getRoles()==null?java.util.Set.<String>of():input.getRoles().stream().map(r->java.util.Objects.toString(r.getId(),r.getCode())).collect(java.util.stream.Collectors.toSet());
+        var existing=target.getRoles()==null?java.util.Set.<String>of():target.getRoles().stream().map(r->java.util.Objects.toString(r.getId(),r.getCode())).collect(java.util.stream.Collectors.toSet());
+        if(!requested.isEmpty()&&!requested.equals(existing)||input.getIdProfil()!=null&&(target.getProfil()==null||!input.getIdProfil().equals(target.getProfil().getId())))throw new ResponseStatusException(HttpStatus.FORBIDDEN,"L'attribution de rôles et de profils est réservée à l'administrateur.");
+    }
     private void hydrateUserRelations(final BaUser user, final BaUserDto dto) {
         if (user == null || dto == null) {
             return;
@@ -542,7 +519,8 @@ public class BaUserService {
             user.setProfil(profilRepository.findById(dto.getIdProfil())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Profil introuvable")));
         }
-        applyAutomaticHierarchyForAgent(user);
+        validateOrganisation(user);
+        assignAgentHierarchy(user);
         // Gérer les rôles directement depuis le DTO
         if (dto.getRoles() != null && !dto.getRoles().isEmpty()) {
             Set<BaRole> userRoles = dto.getRoles().stream()
@@ -553,41 +531,71 @@ public class BaUserService {
         }
     }
 
-    private void applyAutomaticHierarchyForAgent(final BaUser user) {
-        if (user == null || user.getFonction() != EFonctionEmploye.AGENT) {
-            return;
-        }
-        if (user.getDepartement() == null) {
+    private void validateOrganisation(final BaUser user) {
+        if (user.getFonction() == EFonctionEmploye.AGENT && user.getDepartement() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le departement est obligatoire pour un AGENT.");
         }
-        if (user.getService() == null) {
+        if (user.getFonction() == EFonctionEmploye.AGENT && user.getService() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le service est obligatoire pour un AGENT.");
         }
-
-        BaUser directeurDepartement = userRepository
-                .findByFonctionAndDepartementIdAndStatut(EFonctionEmploye.DIRECTEUR, user.getDepartement().getId(), EStatut.A)
-                .stream()
-                .filter(candidate -> user.getId() == null || !user.getId().equals(candidate.getId()))
-                .findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Aucun DIRECTEUR actif trouve pour le departement selectionne."));
-
-        BaUser chefService = userRepository
-                .findByFonctionAndServiceIdAndStatut(EFonctionEmploye.CHEF_SERVICE, user.getService().getId(), EStatut.A)
-                .stream()
-                .filter(candidate -> user.getId() == null || !user.getId().equals(candidate.getId()))
-                .findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Aucun CHEF_SERVICE actif trouve pour le service selectionne."));
-
-        user.setSuperieur(directeurDepartement);
-        user.setSuperieurSecondaire(chefService);
+        if (user.getDepartement() != null && user.getDepartement().getStatut() != EStatut.A)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le departement selectionne est inactif.");
+        if (user.getService() != null) {
+            if (user.getService().getStatut() != EStatut.A)
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le service selectionne est inactif.");
+            if (user.getService().getDepartement() == null || user.getDepartement() == null
+                    || !Objects.equals(user.getService().getDepartement().getId(), user.getDepartement().getId()))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le service doit appartenir au departement selectionne.");
+        }
     }
 
     private boolean isServiceNotApplicable(final EFonctionEmploye fonction) {
         return fonction == EFonctionEmploye.DIRECTEUR
                 || fonction == EFonctionEmploye.DIRECTEUR_GENERAL_ADJOINT
                 || fonction == EFonctionEmploye.DIRECTEUR_GENERAL;
+    }
+
+    /** N+1 = chef du service ; N+2 = directeur du département. Aucun choix arbitraire. */
+    private void assignAgentHierarchy(final BaUser user) {
+        if (user.getFonction() != EFonctionEmploye.AGENT) return;
+        BaUser chief = null, director = null;
+        // Accepter les anciennes fiches inversées, puis enregistrer l'ordre canonique.
+        for (BaUser superior : java.util.stream.Stream.of(user.getSuperieur(), user.getSuperieurSecondaire())
+                .filter(Objects::nonNull).toList()) {
+            if (Objects.equals(user.getId(), superior.getId()))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Un utilisateur ne peut pas etre son propre superieur.");
+            if (!eligibleAgentSuperior(user, superior))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Le responsable doit être actif et déverrouillé : chef du service de l'agent ou directeur de son département.");
+            if (superior.getFonction() == EFonctionEmploye.CHEF_SERVICE) {
+                if (chief != null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choisissez un seul chef de service comme supérieur N+1.");
+                chief = superior;
+            } else {
+                if (director != null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choisissez un seul directeur comme supérieur N+2.");
+                director = superior;
+            }
+        }
+        if (chief == null) chief = uniqueAgentSuperior(user, userRepository.findByFonctionAndServiceIdAndStatut(
+                EFonctionEmploye.CHEF_SERVICE, user.getService().getId(), EStatut.A));
+        if (director == null) director = uniqueAgentSuperior(user, userRepository.findByFonctionAndDepartementIdAndStatut(
+                EFonctionEmploye.DIRECTEUR, user.getDepartement().getId(), EStatut.A));
+        user.setSuperieur(chief);
+        user.setSuperieurSecondaire(director);
+    }
+
+    private BaUser uniqueAgentSuperior(BaUser agent, List<BaUser> candidates) {
+        var eligible = candidates.stream().filter(u -> eligibleAgentSuperior(agent, u)).toList();
+        return eligible.size() == 1 ? eligible.get(0) : null;
+    }
+
+    private boolean eligibleAgentSuperior(BaUser agent, BaUser superior) {
+        if (!com.bakouan.app.service.CongeSecurity.available(superior) || Objects.equals(agent.getId(), superior.getId())) return false;
+        var department = superior.getDepartement() != null ? superior.getDepartement()
+                : superior.getService() == null ? null : superior.getService().getDepartement();
+        if (department == null || !Objects.equals(agent.getDepartement().getId(), department.getId())) return false;
+        return superior.getFonction() == EFonctionEmploye.DIRECTEUR
+                || superior.getFonction() == EFonctionEmploye.CHEF_SERVICE && superior.getService() != null
+                && Objects.equals(agent.getService().getId(), superior.getService().getId());
     }
 
     private void validateHierarchyRules(final BaUser user) {
@@ -611,23 +619,16 @@ public class BaUserService {
 
         switch (fonction) {
             case AGENT:
-                if (sup1 == null || sup2 == null) {
+                if ((sup1 != null && sup1.getFonction() != EFonctionEmploye.CHEF_SERVICE)
+                        || (sup2 != null && sup2.getFonction() != EFonctionEmploye.DIRECTEUR)) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "Un agent doit avoir deux superieurs directs : CHEF_SERVICE et DIRECTEUR.");
-                }
-                final boolean hasChefService = sup1.getFonction() == EFonctionEmploye.CHEF_SERVICE
-                        || sup2.getFonction() == EFonctionEmploye.CHEF_SERVICE;
-                final boolean hasDirecteur = sup1.getFonction() == EFonctionEmploye.DIRECTEUR
-                        || sup2.getFonction() == EFonctionEmploye.DIRECTEUR;
-                if (!hasChefService || !hasDirecteur) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "Les superieurs d'un agent doivent etre un CHEF_SERVICE et un DIRECTEUR.");
+                            "Le supérieur N+1 d'un agent est son chef de service ; le supérieur N+2 est le directeur de son département.");
                 }
                 break;
             case CHEF_SERVICE:
-                if (sup1 == null || sup1.getFonction() != EFonctionEmploye.DIRECTEUR) {
+                if (sup1 != null && sup1.getFonction() != EFonctionEmploye.DIRECTEUR) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "Un CHEF_SERVICE doit avoir un superieur direct de type DIRECTEUR.");
+                            "Le superieur facultatif d'un CHEF_SERVICE doit etre de type DIRECTEUR.");
                 }
                 if (sup2 != null) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -636,9 +637,9 @@ public class BaUserService {
                 break;
             case DIRECTEUR:
             case DIRECTEUR_GENERAL_ADJOINT:
-                if (sup1 == null || sup1.getFonction() != EFonctionEmploye.DIRECTEUR_GENERAL) {
+                if (sup1 != null && sup1.getFonction() != EFonctionEmploye.DIRECTEUR_GENERAL) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "Un DIRECTEUR ou DIRECTEUR_GENERAL_ADJOINT doit avoir un superieur direct DIRECTEUR_GENERAL.");
+                            "Le superieur facultatif d'un DIRECTEUR ou DGA doit etre de type DIRECTEUR_GENERAL.");
                 }
                 if (sup2 != null) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -662,47 +663,10 @@ public class BaUserService {
      *
      * @param updatePasswordDto
      */
-    public void completResetPassword(final BaUpdatePasswordDto updatePasswordDto) {
-        log.info("Finalise la réinitialisation du mot de passe.");
-        final String username = updatePasswordDto.getUsername();
-        final String email = updatePasswordDto.getEmail();
-        final String telephone = updatePasswordDto.getTelephone();
-        final String resetKey = updatePasswordDto.getResetKey();
-
-        Optional<BaUser> oneByEmailAndStatut;
-        if (!BaUtils.isEmpty(username)) {
-            oneByEmailAndStatut = this.userRepository.findOneByUsernameIgnoreCaseAndStatut(username, EStatut.A);
-        } else if (!BaUtils.isEmpty(email)) {
-            oneByEmailAndStatut = this.userRepository.findOneByEmailAndStatut(email, EStatut.A);
-        } else if (!BaUtils.isEmpty(telephone)) {
-            oneByEmailAndStatut = this.userRepository.findOneByTelephoneAndStatut(telephone, EStatut.A);
-        } else {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Votre email ou votre contact est obligatoire");
-        }
-
-        if (oneByEmailAndStatut.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Les informations fournies sont incorrectes");
-        }
-
-        final BaUser user = oneByEmailAndStatut
-                .filter(u -> u.getResetKey() != null
-                        && u.getResetDate().isAfter(ZonedDateTime.now().minusHours(Integer.parseInt("2")))
-                        && resetKey.equals(u.getResetKey()))
-                .map(u -> {
-                    u.setResetKey(null);
-                    u.setResetDate(null);
-                    u.setActivated(Boolean.TRUE);
-                    return u;
-                }).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Le code d'activation a expiré ou est incorrect"));
-
-        if (!Objects.equals(updatePasswordDto.getConfirmer(), updatePasswordDto.getNouveau())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "La confirmation ne correspond pas au mot de passe.");
-        }
-        user.setPassword(this.passwordEncoder.encode(updatePasswordDto.getNouveau()));
-        this.userRepository.save(user);
+    public void completResetPassword(final BaUpdatePasswordDto input) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Demandez un accès temporaire à votre administrateur. La récupération par e-mail est désactivée.");
     }
+
 
     /**
      * Demander la réinitialisation du mot de passe.
@@ -710,48 +674,10 @@ public class BaUserService {
      * @param passwordDto Pour demande la réinitialisation, je prend en compte
      *                    l'email ou le nom d'utilisateur.
      */
-    public void requestPasswordReset(final BaUpdatePasswordDto passwordDto) {
-        log.info("Demande la réinitialisation de son mot de passe.");
-        final String username = passwordDto.getUsername();
-        final String email = passwordDto.getEmail();
-        final String tel = passwordDto.getTelephone();
-        Optional<BaUser> optionalUser;
-
-        if (!BaUtils.isEmpty(username)) {
-            optionalUser = this.userRepository.findOneByUsernameIgnoreCaseAndStatut(username, EStatut.A);
-        } else if (!BaUtils.isEmpty(email)) {
-            optionalUser = this.userRepository.findOneByEmailAndStatut(email, EStatut.A);
-        } else if (!BaUtils.isEmpty(tel)) {
-            optionalUser = this.userRepository.findOneByTelephoneAndStatut(tel, EStatut.A);
-        } else {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Les informations sont incomplètes");
-        }
-        if (optionalUser.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Les informations fournies sont incorrectes");
-        }
-
-        final BaUser user = optionalUser.get();
-        final String resetKey = BaUtils.numberGenerator(Integer.parseInt("8")).toUpperCase();
-        user.setResetKey(resetKey.toUpperCase());
-        user.setResetDate(ZonedDateTime.now());
-        user.setActivated(Boolean.FALSE);
-        this.userRepository.save(user);
+    public void requestPasswordReset(final BaUpdatePasswordDto input) {
+        // Réponse identique pour tous les comptes, sans envoi de mail ni modification.
     }
 
-    /**
-     * Authenticate JWT.
-     *
-     * @param authentication
-     * @return un object d'authentification
-     */
-    public Authentication authenticate(final UsernamePasswordAuthenticationToken authentication) {
-        String username = authentication.getName();
-        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-        if (!passwordEncoder.matches(authentication.getCredentials().toString(), userDetails.getPassword())) {
-            throw new BadCredentialsException("Invalid credentials");
-        }
-        return new UsernamePasswordAuthenticationToken(userDetails, "", userDetails.getAuthorities());
-    }
 
     /**
      * Activer un utilisateur.
@@ -769,6 +695,7 @@ public class BaUserService {
                     usr.setActivated(Boolean.TRUE);
                     usr.setLocked(Boolean.FALSE);
                     usr.setStatut(EStatut.A);
+                    validateUniqueDg(usr);
                     userRepository.save(usr);
                 });
     }
@@ -785,6 +712,32 @@ public class BaUserService {
         user.setActivated(Boolean.FALSE);
         user.setLocked(Boolean.TRUE);
         userRepository.save(user);
+    }
+
+    public BaUser requireAdministrator() {
+        BaUser actor = getCurrentUserEntity().orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Utilisateur non connecte."));
+        if (!isAdministrator(actor) || !Boolean.TRUE.equals(actor.getActivated()) || Boolean.TRUE.equals(actor.getLocked())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Action reservee aux administrateurs actifs.");
+        }
+        return actor;
+    }
+
+    /** Verrou commun aux changements de direction, y compris sur une configuration vide. */
+    public void lockDirectionGenerale() {
+        roleRepository.findLockedByCode(BaRolesConstants.BA_CONNECT).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.CONFLICT, "Le role BA_CONNECT doit etre configure."));
+    }
+
+    private void validateUniqueDg(final BaUser user) {
+        if (user.getFonction() != EFonctionEmploye.DIRECTEUR_GENERAL || user.getStatut() != EStatut.A
+                || !Boolean.TRUE.equals(user.getActivated()) || Boolean.TRUE.equals(user.getLocked())) return;
+        lockDirectionGenerale();
+        if (userRepository.findByStatut(EStatut.A).stream().anyMatch(other ->
+                other.getFonction() == EFonctionEmploye.DIRECTEUR_GENERAL && Boolean.TRUE.equals(other.getActivated())
+                && !Boolean.TRUE.equals(other.getLocked()) && !Objects.equals(other.getId(), user.getId()))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Un DG actif existe deja. Desactivez son compte avant de nommer son remplacant.");
+        }
     }
 
     private BaUser requireUserManager() {
@@ -840,16 +793,7 @@ public class BaUserService {
     }
 
     private boolean isAdministrator(final BaUser user) {
-        if (user == null || user.getRoles() == null) {
-            return false;
-        }
-        return user.getRoles().stream().anyMatch(role -> {
-            String code = role.getCode() == null ? "" : role.getCode().toUpperCase();
-            String libelle = role.getLibelle() == null ? "" : role.getLibelle().toUpperCase();
-            return code.contains("ADMINISTRATEUR")
-                    || code.contains("ADMIN")
-                    || libelle.contains("ADMINISTRATEUR")
-                    || libelle.contains("ADMIN");
-        });
+        return user != null && user.getRoles() != null && user.getRoles().stream()
+                .anyMatch(role -> role.getStatut() == EStatut.A && BaRolesConstants.BA_ADMIN.equalsIgnoreCase(role.getCode()));
     }
 }

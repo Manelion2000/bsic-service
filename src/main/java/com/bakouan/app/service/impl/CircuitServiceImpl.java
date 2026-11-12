@@ -43,9 +43,12 @@ public class CircuitServiceImpl implements CircuitService {
     private final BaServiceRepository serviceRepository;
     private final BaRoleRepository roleRepository;
     private final CircuitMapper circuitMapper;
+    private final com.bakouan.app.security.BaUserService security;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @Override
     public CircuitResponseDto createCircuit(final CircuitRequestDto request) {
+        security.requireAdministrator();
         validateCircuitRequest(request);
         BaCircuit circuit = new BaCircuit();
         circuit.setId(BaUtils.randomUUID());
@@ -64,8 +67,10 @@ public class CircuitServiceImpl implements CircuitService {
 
     @Override
     public CircuitResponseDto updateCircuit(final String id, final CircuitRequestDto request) {
+        security.requireAdministrator();
         validateCircuitRequest(request);
         BaCircuit circuit = getCircuitEntity(id);
+        editable(circuit);
         circuit.setLibelle(request.getLibelle().trim());
         circuit.setDescription(request.getDescription());
         applyCircuitStatus(circuit, request);
@@ -88,6 +93,7 @@ public class CircuitServiceImpl implements CircuitService {
     @Override
     public List<CircuitResponseDto> getCircuits() {
         return circuitRepository.findByStatutOrderByCreatedDateDesc(EStatut.A).stream()
+                .filter(c -> !c.isAutonome())
                 .map(c -> circuitMapper.toResponse(c, circuitEtapeRepository.findByCircuitIdOrderByOrdre(c.getId())))
                 .collect(Collectors.toList());
     }
@@ -102,6 +108,7 @@ public class CircuitServiceImpl implements CircuitService {
 
     @Override
     public CircuitResponseDto activerCircuit(final String id) {
+        security.requireAdministrator();
         BaCircuit circuit = getCircuitEntity(id);
         if (!testerCircuit(id)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le circuit est invalide et ne peut pas etre active.");
@@ -114,6 +121,7 @@ public class CircuitServiceImpl implements CircuitService {
 
     @Override
     public CircuitResponseDto desactiverCircuit(final String id) {
+        security.requireAdministrator();
         BaCircuit circuit = getCircuitEntity(id);
         circuit.setStatu(ECircuitStatut.INACTIF);
         circuit.setActif(false);
@@ -123,6 +131,7 @@ public class CircuitServiceImpl implements CircuitService {
 
     @Override
     public CircuitResponseDto dupliquerCircuit(final String id, final String nouveauNom) {
+        security.requireAdministrator();
         if (BaUtils.isEmpty(nouveauNom)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le nom du nouveau circuit est obligatoire.");
         }
@@ -175,6 +184,7 @@ public class CircuitServiceImpl implements CircuitService {
 
     @Override
     public void deleteCircuit(final String id) {
+        security.requireAdministrator();
         BaCircuit circuit = getCircuitEntity(id);
         circuit.setActif(false);
         circuit.setStatu(ECircuitStatut.INACTIF);
@@ -194,6 +204,8 @@ public class CircuitServiceImpl implements CircuitService {
     public List<CircuitEtapeResponseDto> replaceCircuitEtapes(final String circuitId,
                                                               final List<CircuitEtapeRequestDto> etapes) {
         BaCircuit circuit = getCircuitEntity(circuitId);
+        security.requireAdministrator();
+        editable(circuit);
         validateEtapes(etapes);
         circuitEtapeRepository.deleteByCircuitId(circuitId);
         List<BaCircuitEtape> saved = persistEtapes(circuit, etapes);
@@ -202,7 +214,10 @@ public class CircuitServiceImpl implements CircuitService {
 
     @Override
     public CircuitEtapeResponseDto addCircuitEtape(final String circuitId, final CircuitEtapeRequestDto request) {
+        security.requireAdministrator();
         BaCircuit circuit = getCircuitEntity(circuitId);
+        security.requireAdministrator();
+        editable(getCircuitEntity(circuitId));
         validateSingleEtape(request);
         if (circuitEtapeRepository.existsByCircuitIdAndOrdre(circuitId, request.getOrdre())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Une etape existe deja pour cet ordre.");
@@ -244,12 +259,14 @@ public class CircuitServiceImpl implements CircuitService {
 
     @Override
     public void deleteCircuitEtape(final String circuitId, final String etapeId) {
+        security.requireAdministrator();
         getCircuitEntity(circuitId);
         BaCircuitEtape etape = circuitEtapeRepository.findById(etapeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Etape introuvable"));
         if (!circuitId.equals(etape.getCircuit().getId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Etape non liee a ce circuit.");
         }
+        editable(getCircuitEntity(circuitId));
         circuitEtapeRepository.delete(etape);
     }
 
@@ -392,15 +409,15 @@ public class CircuitServiceImpl implements CircuitService {
     }
 
     private BaCircuit getCircuitEntity(final String id) {
-        return circuitRepository.findById(id)
+        return circuitRepository.findById(id).filter(c -> !c.isAutonome() && c.getStatut()==EStatut.A)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Circuit introuvable"));
     }
 
+    private void editable(BaCircuit c) {
+        Long used=jdbc.queryForObject("select (select count(*) from ba_fiche_habilitation where circuit_id=?)+(select count(*) from ba_reinitialisation_compte where circuit_id=?)",Long.class,c.getId(),c.getId());
+        if(used!=null&&used>0)throw new ResponseStatusException(HttpStatus.CONFLICT,"Ce circuit porte un historique de demandes. Dupliquez-le avant de modifier ses étapes.");
+    }
     private String generateCircuitCode() {
-        int next = circuitRepository.countByCreatedDateBetween(
-                Year.now().atDay(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant(),
-                Year.now().plusYears(1).atDay(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant()
-        ) + 1;
-        return String.format("CIR-%d-%03d", Year.now().getValue(), next);
+        return "CIR-"+Year.now().getValue()+"-"+java.util.UUID.randomUUID().toString().substring(0,12).toUpperCase(java.util.Locale.ROOT);
     }
 }

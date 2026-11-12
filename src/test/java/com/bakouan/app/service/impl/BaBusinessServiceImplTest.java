@@ -41,6 +41,7 @@ class BaBusinessServiceImplTest {
     private BaUserRepository userRepository;
     @Mock
     private BaPlateformeRepository plateformeRepository;
+    @Mock private com.bakouan.app.service.PlateformeCatalogueService plateformeCatalogueService;
     //@Mock
             // private BaPlateformeEtapeConfigRepository plateformeEtapeConfigRepository;
     @Mock
@@ -64,8 +65,38 @@ class BaBusinessServiceImplTest {
     @Mock
     private BaUserService userService;
 
+    @Mock
+    private com.bakouan.app.service.SignatureService signatures;
+
     @InjectMocks
     private BaBusinessServiceImpl service;
+
+    @Test
+    void directoryUsesServiceDepartmentForLegacyAgentsAndKeepsPublicFieldsLimited() throws Exception {
+        var department=new BaDepartement();department.setId("legacy-dep");department.setNom("Informatique");
+        var team=new BaService();team.setId("legacy-service");team.setNom("Support");team.setDepartement(department);
+        var agent=new BaUser();agent.setNom("Bakouan");agent.setPrenom("Abd");agent.setService(team);
+        agent.setEmail("private@example.com");agent.setEmailPro("agent@bsic.bf");agent.setTelephone("+226 70001122");agent.setTelephoneMobile("private-mobile");
+        when(userRepository.findByStatut(com.bakouan.app.enums.EStatut.A)).thenReturn(List.of(agent));
+        var internal=service.getAnnuaire("legacy-dep",null,null);assertEquals(1,internal.size());assertEquals("Informatique",internal.get(0).getNom());
+        assertEquals("private-mobile",internal.get(0).getAgents().get(0).getTelephoneSecondaire());
+        var external=service.getPublicAnnuaire("legacy-dep",null,null);assertEquals(1,external.size());
+        var contact=external.get(0).getAgents().get(0);assertEquals("agent@bsic.bf",contact.getEmail());assertEquals("+226 70001122",contact.getTelephone());
+        var json=new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(contact);
+        org.junit.jupiter.api.Assertions.assertFalse(json.has("telephoneSecondaire"));org.junit.jupiter.api.Assertions.assertFalse(json.has("roles"));
+        agent.setEmailPro("private@example.com");org.junit.jupiter.api.Assertions.assertNull(service.getPublicAnnuaire(null,null,null).get(0).getAgents().get(0).getEmail());
+    }
+
+    @Test
+    void directoryPrefersExplicitDepartmentAndHandlesMissingNames() {
+        var explicit=new BaDepartement();explicit.setId("explicit");
+        var inherited=new BaDepartement();inherited.setId("inherited");inherited.setNom("Support");
+        var team=new BaService();team.setDepartement(inherited);
+        var first=new BaUser();first.setDepartement(explicit);first.setService(team);var second=new BaUser();second.setService(team);
+        when(userRepository.findByStatut(com.bakouan.app.enums.EStatut.A)).thenReturn(List.of(first,second));
+        assertEquals(1,service.getAnnuaire("explicit",null,null).size());assertEquals(1,service.getPublicAnnuaire("inherited",null,null).size());
+        assertEquals(2,service.getPublicAnnuaire(null,null,null).size());
+    }
 
     @Test
     void updateService_updatesFieldsAndDepartement() {
@@ -145,13 +176,11 @@ class BaBusinessServiceImplTest {
         entity.setId("P1");
         entity.setCode("PL1");
         entity.setNom("Old");
-        when(plateformeRepository.findById("P1")).thenReturn(Optional.of(entity));
-        when(plateformeRepository.existsByCode("PL2")).thenReturn(false);
-        when(plateformeRepository.save(any(BaPlateforme.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         BaPlateformeDto dto = new BaPlateformeDto();
         dto.setCode("PL2");
         dto.setNom("Plateforme 2");
+        when(plateformeCatalogueService.legacyUpdate("P1", dto)).thenReturn(dto);
 
         BaPlateformeDto result = service.updatePlateforme("P1", dto);
 
@@ -477,7 +506,7 @@ class BaBusinessServiceImplTest {
         BaFicheHabilitation fiche = buildFiche("F1");
         fiche.setCircuit(buildCircuit("C1"));
         BaFicheHabilitationEtape etapeDit = buildEtape("E-DIT", fiche, 1, EHabilitationStatut.EN_ATTENTE);
-        when(ficheHabilitationEtapeRepository.findById("E-DIT")).thenReturn(Optional.of(etapeDit));
+        when(ficheHabilitationEtapeRepository.findLockedById("E-DIT")).thenReturn(Optional.of(etapeDit));
         when(ficheHabilitationEtapeRepository.findByFicheIdOrderByOrdre("F1")).thenReturn(List.of(etapeDit));
         when(circuitEtapeRepository.findByCircuitIdOrderByOrdre("C1"))
                 .thenReturn(List.of(buildCircuitEtape(fiche.getCircuit(), 1, "D-IT")));

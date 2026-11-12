@@ -5,8 +5,6 @@ import com.bakouan.app.enums.EHabilitationStatut;
 import com.bakouan.app.enums.EHabilitationEtapeType;
 import com.bakouan.app.enums.EHabilitationFicheStatut;
 import com.bakouan.app.service.BaBusinessService;
-import com.bakouan.app.service.BaAutorisationSortieService;
-import com.bakouan.app.service.BaRepriseServiceManager;
 import com.bakouan.app.service.CircuitService;
 import com.bakouan.app.utils.BaConstants;
 import lombok.RequiredArgsConstructor;
@@ -28,8 +26,6 @@ public class BaBusinessController {
 
     private final BaBusinessService businessService;
     private final CircuitService circuitService;
-    private final BaAutorisationSortieService autorisationSortieService;
-    private final BaRepriseServiceManager repriseServiceManager;
 
     @GetMapping(BaConstants.URL.PUBLIC + BaConstants.URL.ANNUAIRE + BaConstants.URL.SERVICE)
     public List<BaServiceDto> getPublicServices() {
@@ -360,91 +356,6 @@ public class BaBusinessController {
                                                       @PathVariable String etapeId) {
         circuitService.deleteCircuitEtape(id, etapeId);
         return ResponseEntity.noContent().build();
-    }
-
-    @PostMapping(BaConstants.URL.AUTORISATION_SORTIE)
-    public ResponseEntity<BaAutorisationSortieDto> createDemandeSortie(@RequestBody BaAutorisationSortieRequestDto request) {
-        return new ResponseEntity<>(autorisationSortieService.createDemande(request), HttpStatus.CREATED);
-    }
-
-    @GetMapping(BaConstants.URL.AUTORISATION_SORTIE_MES_DEMANDES)
-    public List<BaAutorisationSortieDto> getMesDemandesSortie() {
-        return autorisationSortieService.getMesDemandes();
-    }
-
-    @GetMapping(BaConstants.URL.AUTORISATION_SORTIE_A_VALIDER)
-    public List<BaAutorisationSortieDto> getDemandesSortieAValider() {
-        return autorisationSortieService.getDemandesAValider();
-    }
-
-    @PutMapping(BaConstants.URL.AUTORISATION_SORTIE + "/{id}/valider")
-    public ResponseEntity<BaAutorisationSortieDto> validerDemandeSortie(@PathVariable String id,
-                                                                         @RequestParam(value = "commentaire", required = false) String commentaire) {
-        return ResponseEntity.ok(autorisationSortieService.validerDemande(id, commentaire));
-    }
-
-    @PutMapping(BaConstants.URL.AUTORISATION_SORTIE + "/{id}/rejeter")
-    public ResponseEntity<BaAutorisationSortieDto> rejeterDemandeSortie(@PathVariable String id,
-                                                                         @RequestParam(value = "commentaire", required = false) String commentaire) {
-        return ResponseEntity.ok(autorisationSortieService.rejeterDemande(id, commentaire));
-    }
-
-    @GetMapping(BaConstants.URL.AUTORISATION_SORTIE + "/statistiques")
-    public BaRhDemandesStatsDto getStatistiquesAutorisations(@ModelAttribute BaRhDemandesFilterDto filter) {
-        return autorisationSortieService.getStatistiques(filter);
-    }
-
-    @GetMapping(BaConstants.URL.AUTORISATION_SORTIE + "/suivi")
-    public org.springframework.data.domain.Page<BaAutorisationSortieSuiviDto> getSuiviAutorisations(
-            @ModelAttribute BaRhDemandesFilterDto filter,
-            org.springframework.data.domain.Pageable pageable) {
-        return autorisationSortieService.getSuivi(filter, pageable);
-    }
-
-    @PostMapping(BaConstants.URL.REPRISE_SERVICE)
-    public ResponseEntity<BaRepriseServiceDto> createDemandeReprise(@RequestBody BaRepriseServiceRequestDto request) {
-        return new ResponseEntity<>(repriseServiceManager.createDemande(request), HttpStatus.CREATED);
-    }
-
-    @GetMapping(BaConstants.URL.REPRISE_SERVICE_MES_DEMANDES)
-    public List<BaRepriseServiceDto> getMesDemandesReprise() {
-        return repriseServiceManager.getMesDemandes();
-    }
-
-    @GetMapping(BaConstants.URL.REPRISE_SERVICE_A_VALIDER)
-    public List<BaRepriseServiceDto> getDemandesRepriseAValider() {
-        return repriseServiceManager.getDemandesAValider();
-    }
-
-    @GetMapping(BaConstants.URL.REPRISE_SERVICE + "/{id}")
-    public ResponseEntity<BaRepriseServiceDto> getDemandeReprise(@PathVariable String id) {
-        return ResponseEntity.ok(repriseServiceManager.getById(id));
-    }
-
-    @PutMapping(BaConstants.URL.REPRISE_SERVICE + "/{id}/valider")
-    public ResponseEntity<BaRepriseServiceDto> validerDemandeReprise(
-            @PathVariable String id,
-            @RequestParam(value = "commentaire", required = false) String commentaire) {
-        return ResponseEntity.ok(repriseServiceManager.valider(id, commentaire));
-    }
-
-    @PutMapping(BaConstants.URL.REPRISE_SERVICE + "/{id}/rejeter")
-    public ResponseEntity<BaRepriseServiceDto> rejeterDemandeReprise(
-            @PathVariable String id,
-            @RequestParam("commentaire") String commentaire) {
-        return ResponseEntity.ok(repriseServiceManager.rejeter(id, commentaire));
-    }
-
-    @GetMapping(BaConstants.URL.REPRISE_SERVICE + "/statistiques")
-    public BaRhDemandesStatsDto getStatistiquesReprises(@ModelAttribute BaRhDemandesFilterDto filter) {
-        return repriseServiceManager.getStatistiques(filter);
-    }
-
-    @GetMapping(BaConstants.URL.REPRISE_SERVICE + "/suivi")
-    public org.springframework.data.domain.Page<BaRepriseServiceSuiviDto> getSuiviReprises(
-            @ModelAttribute BaRhDemandesFilterDto filter,
-            org.springframework.data.domain.Pageable pageable) {
-        return repriseServiceManager.getSuivi(filter, pageable);
     }
 
     @GetMapping(BaConstants.URL.VALIDATION_DELEGATION)

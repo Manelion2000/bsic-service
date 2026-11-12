@@ -15,9 +15,9 @@ public interface BaAutorisationSortieService {
 
     List<BaAutorisationSortieDto> getDemandesAValider();
 
-    BaAutorisationSortieDto validerDemande(String id, String commentaire);
+    BaAutorisationSortieDto validerDemande(String id, int etape, String commentaire);
 
-    BaAutorisationSortieDto rejeterDemande(String id, String commentaire);
+    BaAutorisationSortieDto rejeterDemande(String id, int etape, String commentaire);
 
     BaRhDemandesStatsDto getStatistiques(BaRhDemandesFilterDto filter);
 

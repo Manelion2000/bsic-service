@@ -7,7 +7,7 @@ import com.bakouan.app.dto.BaProfilDto;
 import com.bakouan.app.dto.BaRoleDto;
 import com.bakouan.app.dto.BaUpdatePasswordDto;
 import com.bakouan.app.dto.BaUserDto;
-import com.bakouan.app.security.BaUserDetailsService;
+import com.bakouan.app.security.BaAuthenticationService;
 import com.bakouan.app.security.jwt.JWTFilter;
 import com.bakouan.app.security.jwt.RevokedTokenService;
 import com.bakouan.app.security.jwt.TokenProvider;
@@ -48,8 +48,9 @@ public class BaUserController {
 
     private final TokenProvider tokenProvider;
 
-    private final BaUserDetailsService userDetailsService;
+    private final BaAuthenticationService authenticationService;
     private final RevokedTokenService revokedTokenService;
+    private final com.bakouan.app.security.AccountCredentialService credentialService;
 
 
     /**
@@ -61,22 +62,15 @@ public class BaUserController {
     @PostMapping(BaConstants.URL.AUTHENTICATE)
     public ResponseEntity<BaJWTTokenDto> authorize(final @Valid @RequestBody BaLoginDto loginVM) {
 
-        this.userDetailsService.checkValiditeCompte(loginVM.getUsername());
         HttpHeaders httpHeaders = new HttpHeaders();
-        BaJWTTokenDto jwt;
-        try {
-            UsernamePasswordAuthenticationToken authenticationToken =
-                    new UsernamePasswordAuthenticationToken(loginVM.getUsername(), loginVM.getPassword());
-            Authentication authentication = this.userService.authenticate(authenticationToken);
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-            boolean rememberMe = Boolean.TRUE.equals(loginVM.getRememberMe());
-            jwt = tokenProvider.createToken(authentication, rememberMe);
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le mot de passe et le nom d'utilisateur "
-                    + "ne correspondent pas.");
-        }
+        UsernamePasswordAuthenticationToken authenticationToken =
+                new UsernamePasswordAuthenticationToken(loginVM.getUsername().trim(), loginVM.getPassword());
+        Authentication authentication = authenticationService.authenticate(authenticationToken);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        boolean rememberMe = Boolean.TRUE.equals(loginVM.getRememberMe());
+        BaJWTTokenDto jwt = tokenProvider.createToken(authentication, rememberMe);
         httpHeaders.add(JWTFilter.AUTHORIZATION_HEADER, "Bearer " + jwt.getToken());
-        return new ResponseEntity<>(jwt, httpHeaders, HttpStatus.OK);
+        return ResponseEntity.ok().headers(httpHeaders).cacheControl(org.springframework.http.CacheControl.noStore()).body(jwt);
     }
 
     /**
@@ -117,9 +111,17 @@ public class BaUserController {
      * @return {@link ResponseEntity}p
      */
     @PostMapping(BaConstants.URL.USER)
-    public ResponseEntity<Void> postUser(final @Valid @RequestBody BaUserDto userDto) {
-        userService.createUser(userDto);
-        return new ResponseEntity<>(HttpStatus.CREATED);
+    public ResponseEntity<BaUserDto> postUser(final @Valid @RequestBody BaUserDto userDto) {
+        return ResponseEntity.status(HttpStatus.CREATED).cacheControl(org.springframework.http.CacheControl.noStore()).body(userService.createUser(userDto));
+    }
+
+    @PostMapping(BaConstants.URL.USER+"/{id}/initialiser-acces")
+    public ResponseEntity<com.bakouan.app.dto.TemporaryCredentialDto> resetAccess(@PathVariable String id,@RequestBody @Valid com.bakouan.app.dto.PasswordAccessDtos.Reset input){
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(credentialService.reset(id,input));
+    }
+    @PutMapping(BaConstants.URL.USER+"/complete-initial-password")
+    public ResponseEntity<Void> completeInitialPassword(@RequestBody com.bakouan.app.dto.PasswordAccessDtos.Complete input){
+        credentialService.complete(input);return ResponseEntity.noContent().cacheControl(org.springframework.http.CacheControl.noStore()).build();
     }
 
     /**
@@ -276,6 +278,7 @@ public class BaUserController {
     @PutMapping(BaConstants.URL.USER + "/complete-reset-password")
     public ResponseEntity<Void> completeResetPassword(
             @RequestBody @Valid final BaUpdatePasswordDto updatePasswordDto) {
+        authenticationService.checkPasswordResetAllowed();
         this.userService.completResetPassword(updatePasswordDto);
         return ResponseEntity.ok().build();
     }
@@ -289,6 +292,7 @@ public class BaUserController {
     @PutMapping(BaConstants.URL.USER + "/request-reset-password")
     public ResponseEntity<Void> requestResetPassword(
             @RequestBody final BaUpdatePasswordDto passwordDto) {
+        authenticationService.checkPasswordResetAllowed();
         this.userService.requestPasswordReset(passwordDto);
         return ResponseEntity.ok().build();
     }
@@ -348,6 +352,8 @@ public class BaUserController {
         try {
             BaUserDto updatedUser = userService.addRoleToUser(userId, roleId);
             return new ResponseEntity<>(updatedUser, HttpStatus.OK);
+        } catch (ResponseStatusException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Erreur lors de l'ajout du rôle {} à l'utilisateur {}: {}", roleId, userId, e.getMessage());
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
@@ -367,6 +373,8 @@ public class BaUserController {
         try {
             BaUserDto updatedUser = userService.removeRoleFromUser(userId, roleId);
             return new ResponseEntity<>(updatedUser, HttpStatus.OK);
+        } catch (ResponseStatusException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Erreur lors de la suppression du rôle {} de l'utilisateur {}: {}", roleId, userId, e.getMessage());
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());

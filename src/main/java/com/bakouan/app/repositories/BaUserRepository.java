@@ -21,6 +21,13 @@ import java.util.stream.Stream;
  */
 @Repository
 public interface BaUserRepository extends JpaRepository<BaUser, String> {
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from BaUser u where u.id = :id")
+    Optional<BaUser> findLockedById(@Param("id") String id);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from BaUser u where lower(u.username)=lower(:username) and u.statut=:statut")
+    Optional<BaUser> findLockedByUsername(@Param("username") String username,@Param("statut") EStatut statut);
 
     /**
      * Recherche un utilisateur par son login.
@@ -65,6 +72,11 @@ public interface BaUserRepository extends JpaRepository<BaUser, String> {
      * @return un boolean.
      */
     boolean existsByEmailIgnoreCase(String email);
+
+    @Query("select count(distinct u.id) > 0 from BaUser u left join u.roles directRole "
+            + "left join u.profil p left join p.roles inheritedRole "
+            + "where upper(directRole.code) = upper(:code) or upper(inheritedRole.code) = upper(:code)")
+    boolean existsWithRoleCode(@Param("code") String code);
 
 
     /**

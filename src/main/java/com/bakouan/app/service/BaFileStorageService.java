@@ -29,18 +29,25 @@ public class BaFileStorageService {
      * @param idDoc identifiant du fichier.
      * @return un tableau de byte
      */
+    private Path resolve(final String id) {
+        if(id==null || !id.matches("[a-zA-Z0-9._-]{1,150}") || id.contains(".."))throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,"Identifiant de document invalide.");
+        Path root=Path.of(basePath).toAbsolutePath().normalize();Path target=root.resolve(id).normalize();
+        if(!target.startsWith(root))throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,"Identifiant de document invalide.");
+        try{if(Files.exists(target)&&!target.toRealPath().startsWith(root.toRealPath()))throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,"Document hors du stockage autorisé.");}catch(IOException e){throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,"Stockage indisponible.");}
+        return target;
+    }
+
     public byte[] get(final String idDoc) {
-        File file = new File(basePath + File.separator + idDoc);
+        File file = resolve(idDoc).toFile();
         try {
             if (file.exists()) {
                 return Files.readAllBytes(file.toPath());
             } else {
-                log.debug("Fichier inexistant : {}", idDoc);
-                return new byte[]{};
+                throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND,"Document introuvable.");
             }
         } catch (IOException e) {
             log.error("Erreur de chargement du fichier : " + idDoc, e);
-            return new byte[]{};
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR,"Lecture du document impossible.");
         }
     }
 
@@ -53,17 +60,13 @@ public class BaFileStorageService {
     public String save(final byte[] content) {
         String id = BaUtils.randomUUID();
         if (content != null && content.length > 0) {
-            File file = new File(basePath + File.separator + id);
+            File file = resolve(id).toFile();
 
             try {
+                Files.createDirectories(file.toPath().getParent());
                 log.debug("Saving File :  {} in : {}", id, file.getAbsolutePath());
 
-                final Path path = Path.of(basePath);
-                if (!Files.exists(path)) {
-                    Files.createDirectory(path);
-                }
-
-                Files.write(file.toPath(), content,
+Files.write(file.toPath(), content,
                         StandardOpenOption.CREATE,
                         StandardOpenOption.WRITE,
                         StandardOpenOption.TRUNCATE_EXISTING);
@@ -85,7 +88,7 @@ public class BaFileStorageService {
     public boolean update(final String idDocument, final byte[] content) {
 
         if (content != null && content.length > 0) {
-            File file = new File(basePath + File.separator + idDocument);
+            File file = resolve(idDocument).toFile();
             try {
                 log.debug("Saving File :  {} in : {}", idDocument, file.getAbsolutePath());
                 Files.write(file.toPath(), content,
@@ -108,7 +111,7 @@ public class BaFileStorageService {
      */
     public boolean remove(final String idDocument) {
         log.warn("Removing file {}", idDocument);
-        File file = new File(basePath + File.separator + idDocument);
+        File file = resolve(idDocument).toFile();
         try {
             if (file.exists()) {
                 Files.delete(file.toPath());

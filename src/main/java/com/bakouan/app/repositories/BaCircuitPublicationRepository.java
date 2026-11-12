@@ -1,0 +1,4 @@
+package com.bakouan.app.repositories;import com.bakouan.app.model.BaCircuitPublication; public interface BaCircuitPublicationRepository extends org.springframework.data.jpa.repository.JpaRepository<BaCircuitPublication,String>{java.util.List<BaCircuitPublication> findByCircuitIdOrderByNumeroDesc(String id);
+ @org.springframework.data.jpa.repository.Query("select p.circuit.id from BaCircuitPublication p where p.id=:id") java.util.Optional<String> findCircuitId(@org.springframework.data.repository.query.Param("id") String id);
+ @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE) @org.springframework.data.jpa.repository.Query("select d from BaCircuitPublication d where d.id=:id") java.util.Optional<BaCircuitPublication> findLockedById(@org.springframework.data.repository.query.Param("id") String id);
+ }

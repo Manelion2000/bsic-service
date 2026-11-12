@@ -38,6 +38,8 @@ public class ParamController {
         DocumentType documentType = detectDocumentType(content);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(documentType.mediaType);
+        headers.setCacheControl("no-store");
+        headers.set("X-Content-Type-Options","nosniff");
         headers.setContentDisposition(ContentDisposition.inline().filename("pv-" + id + documentType.extension).build());
         return new ResponseEntity<>(content, headers, HttpStatus.OK);
     }

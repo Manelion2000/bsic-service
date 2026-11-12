@@ -26,7 +26,6 @@ import java.io.IOException;
 public class IntercepteurDeconnexion extends AbstractAuthenticationTargetUrlRequestHandler
         implements LogoutSuccessHandler {
 
-    private final LoginAttemptService loginAttemptService;
 
     /**
      * Fonction appelé à la déconnexion de l'utilisateur.
@@ -45,12 +44,6 @@ public class IntercepteurDeconnexion extends AbstractAuthenticationTargetUrlRequ
 
         log.info("Deconnexion");
 
-        final String xfHeader = request.getHeader("X-Forwarded-For");
-        if (xfHeader == null || xfHeader.trim().isEmpty()) {
-            loginAttemptService.loginFailed(request.getRemoteAddr() + request.getRemotePort());
-        } else {
-            loginAttemptService.loginFailed(xfHeader.split(",")[0]);
-        }
         response.setStatus(HttpServletResponse.SC_OK);
     }
 }
